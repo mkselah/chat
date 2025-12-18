@@ -25,7 +25,7 @@ async function getSuggestions(messages) {
     }
   ];
   const suggestionResp = await openai.chat.completions.create({
-    model: "gpt-4.1",
+    model: "o3",
     messages: suggestionPrompt,
     temperature: 0.65,
     max_tokens: 140,
