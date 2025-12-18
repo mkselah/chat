@@ -27,7 +27,7 @@ async function getSuggestions(messages) {
   const suggestionResp = await openai.chat.completions.create({
     model: "gpt-5.2",
     messages: suggestionPrompt,
-    max_completeion_tokens: 140,
+    max_completion_tokens: 140,
   });
   let suggestions = [];
   try {
