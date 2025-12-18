@@ -28,7 +28,7 @@ async function getSuggestions(messages) {
     model: "o3",
     messages: suggestionPrompt,
     temperature: 0.65,
-    max_tokens: 140,
+    max_completion_tokens: 140,
   });
   let suggestions = [];
   try {
@@ -67,7 +67,7 @@ export async function handler(event) {
       model: "o3",
       messages: contextMsgs,
       temperature: 0.7,
-      max_tokens: 8000,
+      max_completion_tokens: 8000,
     });
     const llmEnd = Date.now();
     const llmDuration = llmEnd - llmStart;
