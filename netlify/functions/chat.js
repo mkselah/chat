@@ -25,10 +25,9 @@ async function getSuggestions(messages) {
     }
   ];
   const suggestionResp = await openai.chat.completions.create({
-    model: "gpt-4.1",
+    model: "gpt-5.2",
     messages: suggestionPrompt,
-    temperature: 0.65,
-    max_tokens: 140,
+    max_completion_tokens: 140,
   });
   let suggestions = [];
   try {
@@ -67,8 +66,7 @@ export async function handler(event) {
     const completion = await openai.chat.completions.create({
       model: useModel,
       messages: contextMsgs,
-      temperature: 0.7,
-      max_tokens: 8000,
+      max_completion_tokens: 8000,
     });
     const llmEnd = Date.now();
     const llmDuration = llmEnd - llmStart;
