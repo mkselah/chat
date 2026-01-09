@@ -219,8 +219,9 @@ function renderTopicsDropdown() {
 }
 topicDropdown.onchange = async function () {
   activeTopicIdx = parseInt(this.value);
-  // Reset model dropdown to your preferred default (e.g., GPT-4.1)
-  modelDropdown.value = "gpt-4.1";
+  // Set modelDropdown to this topic's model, default to GPT-4.1 if missing
+  const topicModel = topics[activeTopicIdx]?.model || "gpt-4.1";
+  modelDropdown.value = topicModel;
   await loadMessages();
   renderAll();
 };

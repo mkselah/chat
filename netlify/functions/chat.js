@@ -65,17 +65,27 @@ export async function handler(event) {
     // 1. Get assistant reply
     const llmStart = Date.now();
     const useModel = model || "gpt-4.1";
-    // Choose appropriate max tokens param (required for GPT-5)
+
+    // Only set temperature for models that allow varying it
+    // For GPT-5 and o3-mini, DO NOT send temperature param
+    const supportsTemperature = !["gpt-5", "o3-mini"].some(tag =>
+      useModel?.toLowerCase().includes(tag)
+    );
     const chatParams = {
       model: useModel,
       messages: contextMsgs,
-      temperature: 0.7
     };
+    if (supportsTemperature) {
+      chatParams.temperature = 0.7;
+    }
+
+    // Set max tokens
     if (useModel && useModel.startsWith("gpt-5")) {
       chatParams.max_completion_tokens = 8000; // for GPT-5
     } else {
       chatParams.max_tokens = 8000; // all others
     }
+
     const completion = await openai.chat.completions.create(chatParams);
     
     const llmEnd = Date.now();
