@@ -63,8 +63,9 @@ export async function handler(event) {
 
     // 1. Get assistant reply
     const llmStart = Date.now();
+    const useModel = model || "gpt-4.1";
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1",
+      model: useModel,
       messages: contextMsgs,
       temperature: 0.7,
       max_tokens: 8000,

@@ -132,9 +132,10 @@ async function loadMessages() {
 
 async function saveTopic(name) {
   if (!user) return;
+  let currentModel = document.getElementById("modelDropdown").value || "gpt-4.1";
   let { data, error } = await supabase
     .from('topics')
-    .insert({ name, user_id: user.id })
+    .insert({ name, user_id: user.id, model: currentModel })
     .select();
   if (error) return alert(error.message);
   topics.push(data[0]);
@@ -146,9 +147,10 @@ async function saveTopic(name) {
 async function renameTopic(idx, name) {
   if (!user || !topics[idx]) return;
   let id = topics[idx].id;
+  let newModel = document.getElementById("modelDropdown").value || "gpt-4.1";
   let { error } = await supabase
     .from('topics')
-    .update({ name })
+    .update({ name, model: newModel })
     .eq('id', id);
   if (error) alert(error.message);
   topics[idx].name = name;
@@ -217,6 +219,8 @@ function renderTopicsDropdown() {
 }
 topicDropdown.onchange = async function () {
   activeTopicIdx = parseInt(this.value);
+  // Reset model dropdown to your preferred default (e.g., GPT-4.1)
+  modelDropdown.value = "gpt-4.1";
   await loadMessages();
   renderAll();
 };
@@ -558,12 +562,13 @@ chatForm.onsubmit = async (e) => {
   chatWindow.scrollTop = chatWindow.scrollHeight;
 
   // Build context messages
+  const currentModel = (topics[activeTopicIdx] && topics[activeTopicIdx].model) || "gpt-4.1";
   const contextMessages = messages.concat([{ role: "user", content: text }]);
-  // Call Netlify function
+  const selectedModel = modelDropdown.value; // <-- get value
   const resp = await fetch("/.netlify/functions/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: contextMessages }),
+    body: JSON.stringify({ messages: contextMessages, model: selectedModel }),
   });
   const json = await resp.json();
   if (json.reply) {
