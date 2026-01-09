@@ -49,7 +49,8 @@ async function getSuggestions(messages) {
 export async function handler(event) {
   const startTime = Date.now();
   try {
-    const { messages } = JSON.parse(event.body);
+    // ADD model here:
+    const { messages, model } = JSON.parse(event.body);
     if (!Array.isArray(messages)) throw new Error("No messages");
 
     // Insert the anti-boilerplate system prompt at the start (after any topic system or before user)
