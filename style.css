@@ -300,3 +300,22 @@ body {
     margin-top: 2px;
   }
 }
+
+.copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1em;
+  opacity: 0.62;
+  padding: 0.15em 0.45em;
+  border-radius: 6px;
+  transition: opacity 0.17s, background 0.18s;
+  color: #3952aa;
+}
+.copy-btn:hover {
+  opacity: 1;
+  background: #e7eefa;
+}
+.copy-btn:active {
+  background: #bed8ff;
+}

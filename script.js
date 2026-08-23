@@ -298,7 +298,28 @@ deleteTopicBtn.onclick = async () => {
   if (confirm("Delete this topic?")) await deleteTopic(activeTopicIdx);
 };
 
-// === MODIFIED: Chat area w/ delete message support and suggestion buttons and LISTEN BUTTON ===
+// ====== COPY BUTTON FEATURE ======
+// Helper: Copy text to clipboard (fallback for older browsers)
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    // Clipboard API
+    navigator.clipboard.writeText(text);
+  } else {
+    // Legacy fallback
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+}
+// ===== END COPY BUTTON FEATURE =======
+
+// === MODIFIED: Chat area w/ delete message support and suggestion buttons and LISTEN BUTTON and COPY BUTTON ===
 function renderChat() {
   chatWindow.innerHTML = '';
   if (!topics[activeTopicIdx]) return;
@@ -308,14 +329,14 @@ function renderChat() {
     if (messages[i].role === "assistant") { lastAssistantIdx = i; break; }
   }
 
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, function(c) {
-    return ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;",
-      '"': "&quot;", "'": "&#039;"
-    })[c];
-  });
-}
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, function(c) {
+      return ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;",
+        '"': "&quot;", "'": "&#039;"
+      })[c];
+    });
+  }
 
   messages.forEach((msg, idx) => {
     // Create bubble row (no longer flex)
@@ -339,7 +360,7 @@ function escapeHtml(s) {
 
     chatWindow.appendChild(div);
 
-    // ====== Action row for assistant: Listen/Download/Trash in new row below bubble ======
+    // ====== Action row for assistant: Listen/Download/Trash/Copy in new row below bubble ======
     if (msg.role === "assistant") {
       const actionRow = document.createElement('div');
       actionRow.className = "action-row";
@@ -383,6 +404,18 @@ function escapeHtml(s) {
       };
       actionRow.appendChild(downloadBtn);
 
+      // ===== Copy Button - NEW! =====
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = "📋";
+      copyBtn.title = "Copy this message text";
+      copyBtn.className = "copy-btn";
+      copyBtn.onclick = () => {
+        copyToClipboard(msg.content);
+        copyBtn.textContent = "✅";
+        setTimeout(() => { copyBtn.textContent = "📋"; }, 1200);
+      };
+      actionRow.appendChild(copyBtn);
+
       // Delete button
       const delBtn = document.createElement('button');
       delBtn.textContent = "🗑️";
@@ -394,10 +427,22 @@ function escapeHtml(s) {
       chatWindow.appendChild(actionRow);
     }
 
-    // ====== If user message, action row is just trash ======
+    // ====== If user message, action row is trash/copy ======
     if (msg.role === "user") {
       const actionRow = document.createElement('div');
       actionRow.className = "action-row";
+      // ===== Copy Button - NEW! =====
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = "📋";
+      copyBtn.title = "Copy this message text";
+      copyBtn.className = "copy-btn";
+      copyBtn.onclick = () => {
+        copyToClipboard(msg.content);
+        copyBtn.textContent = "✅";
+        setTimeout(() => { copyBtn.textContent = "📋"; }, 1200);
+      };
+      actionRow.appendChild(copyBtn);
+
       const delBtn = document.createElement('button');
       delBtn.textContent = "🗑️";
       delBtn.title = "Delete this message";
