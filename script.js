@@ -17,6 +17,7 @@ const loginBtn = document.getElementById("loginBtn");
 const signupBtn = document.getElementById("signupBtn");
 const authStatus = document.getElementById("authStatus");
 const authForm = document.getElementById("authForm");
+const micBtn = document.getElementById("micBtn");
 
 let topics = [];
 let messages = [];
@@ -33,6 +34,63 @@ let ttsState = {
   stopBtn: null, // The stop button element
 };
 // === /End TTS state ===
+
+// ======== Speech Recognition (Mic Input) =========
+let rec = null;
+let recognizing = false;
+
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  micBtn.onclick = function() {
+    if (!rec) {
+      rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.lang = 'en-US'; // Optionally set via dropdown in future
+      rec.interimResults = false;
+      rec.onstart = function() {
+        recognizing = true;
+        micBtn.textContent = "⏹️";
+        micBtn.title = "Stop listening";
+        micBtn.style.background = "#e8faee";
+      };
+      rec.onend = function() {
+        recognizing = false;
+        micBtn.textContent = "🎤";
+        micBtn.title = "Use voice input";
+        micBtn.style.background = "";
+      };
+      rec.onerror = function(e) {
+        recognizing = false;
+        micBtn.textContent = "🎤";
+        micBtn.style.background = "";
+        alert("Speech recognition error: " + e.error);
+      };
+      rec.onresult = function(e) {
+        recognizing = false;
+        micBtn.textContent = "🎤";
+        micBtn.title = "Use voice input";
+        micBtn.style.background = "";
+        if (e.results && e.results[0] && e.results[0][0]) {
+          const transcript = e.results[0][0].transcript;
+          // Option: If you want to auto-send, call chatForm.onsubmit()
+          userInput.value = userInput.value ? (userInput.value.trim() + " " + transcript) : transcript;
+          autoGrow(userInput);
+        }
+      };
+    }
+    if (!recognizing) {
+      rec.start();
+    } else {
+      rec.stop();
+    }
+  };
+} else {
+  micBtn.disabled = true;
+  micBtn.textContent = "🚫";
+  micBtn.title = "Speech-to-text not supported in this browser";
+}
+// ======== END Speech Recognition =========
 
 // --- Add to script.js: splits long text into ~1000 char chunks at ".", "!", "?"
 function splitTextIntoChunks(text, charLimit = 1000) {

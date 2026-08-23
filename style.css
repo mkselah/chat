@@ -121,6 +121,24 @@ body {
   background: #f8f9fa;
 }
 
+#micBtn {
+  background: none;
+  border: none;
+  font-size: 1.13em;
+  padding: 0.1em 0.7em;
+  border-radius: 6px;
+  opacity: 0.77;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+#micBtn:active, #micBtn.recording {
+  background: #dafaea;
+}
+#micBtn[disabled] {
+  color: #999;
+  opacity: 0.5;
+}
+
 #userInput {
   flex: 1;
   font-size: 1.08em;
