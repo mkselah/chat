@@ -308,6 +308,15 @@ function renderChat() {
     if (messages[i].role === "assistant") { lastAssistantIdx = i; break; }
   }
 
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, function(c) {
+    return ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;",
+      '"': "&quot;", "'": "&#039;"
+    })[c];
+  });
+}
+
   messages.forEach((msg, idx) => {
     // Create bubble row (no longer flex)
     const div = document.createElement('div');
@@ -322,7 +331,10 @@ function renderChat() {
         div.innerHTML = msg.content.replace(/\n\n/g, "<br><br>").replace(/\n/g, "<br>");
       }
     } else {
-      div.textContent = msg.content;
+      // Render user message, preserving formatting (line breaks, spaces)
+      // Two methods possible: use <pre> or convert to <br> (use <pre> here for UX)
+      div.innerHTML = "<pre style='margin:0;background:none;border:none;font-family:inherit;font-size:inherit;padding:0;box-shadow:none;white-space:pre-wrap;word-break:break-word;'>" +
+        escapeHtml(msg.content) + "</pre>";
     }
 
     chatWindow.appendChild(div);
