@@ -166,6 +166,26 @@ logoutBtn.onclick = async () => {
 const geminiApiKeyInput = document.getElementById("geminiApiKey");
 const saveGeminiKeyBtn = document.getElementById("saveGeminiKeyBtn");
 const geminiKeyStatus = document.getElementById("geminiKeyStatus");
+const modelDropdown = document.getElementById("modelDropdown");
+
+// ================ Gemini key UX for model dropdown ================
+modelDropdown.onchange = function() {
+  const isGemini = this.value.startsWith("gemini");
+  if (isGemini && !geminiApiKey) {
+    geminiApiKeyInput.focus();
+    geminiKeyStatus.textContent = "Paste your Gemini API key above!";
+    geminiKeyStatus.style.color = "red";
+    // Give user feedback visually (red border highlight input)
+    geminiApiKeyInput.style.border = "2px solid red";
+    setTimeout(() => {
+      geminiApiKeyInput.style.border = "";
+    }, 1800);
+  } else {
+    geminiKeyStatus.textContent = "";
+    geminiKeyStatus.style.color = "";
+    geminiApiKeyInput.style.border = "";
+  }
+};
 
 // On load, put key in the input field (but not in value attribute password for safety, clear after)
 window.addEventListener("DOMContentLoaded", ()=>{
