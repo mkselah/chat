@@ -4,7 +4,7 @@ import fetch from "node-fetch"; // <-- Needed for Gemini fetch
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const GEMINI_API_KEY = process.env.Gemini_API_Key; // Your Gemini Netlify env var
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const ANTI_BOILERPLATE = `
 Do not repeat or rephrase the user's prompt in your answers.
@@ -49,44 +49,46 @@ async function getSuggestions(messages) {
 
 // --- GEMINI LLM CALLER ---
 async function geminiChat(messages) {
-  // Transform OpenAI messages to Gemini text blocks (all strings)
-  // Gemini expects: [{role: "user", parts:[{text:"hi"}]}, ...]
-  function mapRole(role) {
-    if (role === "user") return "user";
-    if (role === "assistant") return "model";
-    // system and others also map to "user" for prompt
-    return "user";
-  }
-  const geminiMsgs = messages.map(msg => ({
-    role: mapRole(msg.role),
-    parts: [{ text: msg.content }]
-  }));
-  // Only last N messages, max prompt
+  // Extract system prompt if present
+  const systemMsg = messages.find(m => m.role === "system");
+  const systemInstruction = systemMsg 
+    ? { parts: [{ text: systemMsg.content }] } 
+    : undefined;
+
+  // Filter out system messages from contents array
+  const geminiMsgs = messages
+    .filter(m => m.role !== "system")
+    .map(msg => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }]
+    }));
+
   const payload = {
-    contents: geminiMsgs
+    contents: geminiMsgs,
+    ...(systemInstruction && { systemInstruction })
   };
 
-  // Gemini API key
   if (!GEMINI_API_KEY) throw new Error("Missing Gemini_API_Key");
-  const url = `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+  
+  // Dynamic model fallback matching
+  let modelName = "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
   const resp = await fetch(url, {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+
   if (!resp.ok) {
     const errJson = await resp.json();
-    throw new Error("Gemini API: " + (errJson.error && errJson.error.message || resp.statusText));
+    throw new Error("Gemini API: " + (errJson.error?.message || resp.statusText));
   }
+
   const data = await resp.json();
-  // Gemini returns {candidates: [{content: {parts:[{text:"..."}]}}]}
-  let reply = "";
-  if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-    reply = data.candidates[0].content.parts[0].text;
-  } else if (data.candidates && data.candidates[0]?.content?.parts) {
-    reply = data.candidates[0].content.parts.map(p=>p.text).join("\n\n");
-  }
+  const reply = data.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n\n");
   if (!reply) throw new Error("Gemini did not return an answer.");
+
   return { reply };
 }
 
