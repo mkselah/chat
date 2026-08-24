@@ -4,7 +4,7 @@ import fetch from "node-fetch"; // <-- Needed for Gemini fetch
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const GEMINI_API_KEY = process.env.Gemini_API_Key; // Your Gemini Netlify env var
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
 
 const ANTI_BOILERPLATE = `
 Do not repeat or rephrase the user's prompt in your answers.
@@ -71,7 +71,7 @@ async function geminiChat(messages) {
   if (!GEMINI_API_KEY) throw new Error("Missing Gemini_API_Key");
   
   // Dynamic model fallback matching
-  let modelName = "gemini-2.5-flash";
+  let modelName = "gemini-3.6-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
   const resp = await fetch(url, {
