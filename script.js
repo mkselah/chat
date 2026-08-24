@@ -681,11 +681,28 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
     [{ role: "user", content: suggestionText }]
   );
   // Call Netlify function
-  const resp = await fetch("/.netlify/functions/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: contextMessages }),
-  });
+  const selectedModel = modelDropdown.value; // Make sure you use the current dropdown value!
+const isGemini = selectedModel.startsWith("gemini");
+const reqBody = { messages: contextMessages, model: selectedModel };
+if(isGemini) {
+  if (!geminiApiKey) {
+    geminiApiKeyInput.focus();
+    geminiKeyStatus.textContent = "Paste your Gemini API key above!";
+    geminiKeyStatus.style.color = "red";
+    geminiApiKeyInput.style.border = "2px solid red";
+    setTimeout(() => {
+      geminiApiKeyInput.style.border = "";
+      geminiKeyStatus.textContent = "";
+    }, 1600);
+    return;
+  }
+  reqBody.geminiApiKey = geminiApiKey;
+}
+const resp = await fetch("/.netlify/functions/chat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(reqBody),
+});
   const json = await resp.json();
   if (json.reply) {
     // Add assistant message to DB
@@ -734,23 +751,30 @@ chatForm.onsubmit = async (e) => {
   // Build context messages
   const currentModel = (topics[activeTopicIdx] && topics[activeTopicIdx].model) || "gpt-4.1";
   const contextMessages = messages.concat([{ role: "user", content: text }]);
-  const selectedModel = modelDropdown.value; // e.g., "gemini-pro" or "gpt-4.1"
-const isGemini = selectedModel.startsWith("gemini");
+  const selectedModel = modelDropdown.value; // e.g., "gemini-1.5-pro" or "gpt-4.1"
+  const isGemini = selectedModel.startsWith("gemini");
 
-const reqBody = { messages: contextMessages, model: selectedModel };
-if (isGemini) {
-  if (!geminiApiKey) {
-    alert("You must set a Gemini API key for these models.");
+  // Prompt for missing Gemini key (extra guard)
+  if (isGemini && !geminiApiKey) {
+    geminiApiKeyInput.focus();
+    geminiKeyStatus.textContent = "Paste your Gemini API key above!";
+    geminiKeyStatus.style.color = "red";
+    geminiApiKeyInput.style.border = "2px solid red";
+    setTimeout(() => {
+      geminiApiKeyInput.style.border = "";
+      geminiKeyStatus.textContent = "";
+    }, 1600);
     return;
   }
-  reqBody.geminiApiKey = geminiApiKey;
-}
 
-const resp = await fetch("/.netlify/functions/chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(reqBody),
-});
+  const reqBody = { messages: contextMessages, model: selectedModel };
+  if (isGemini) reqBody.geminiApiKey = geminiApiKey;
+
+  const resp = await fetch("/.netlify/functions/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody),
+  });
   const json = await resp.json();
   if (json.reply) {
     await addMessage("assistant", json.reply);
