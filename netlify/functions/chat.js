@@ -1,43 +1,6 @@
 import { OpenAI } from "openai";
 
-import { OpenAI } from "openai";
-import fetch from "node-fetch";  // add if not present (node >18: use global fetch)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Helper for Gemini
-async function fetchGemini({messages, model, apiKey}) {
-  // Format Google Gemini API, see https://ai.google.dev/tutorials/node_quickstart
-  // Compose prompt
-  const systemMsgs = messages.filter(m => m.role === "system").map(m => m.content).join("\n");
-  const contentMsgs = messages.filter(m => m.role === "user" || m.role === "assistant");
-  const textParts = [];
-  if(systemMsgs) textParts.push(systemMsgs);
-  for(const m of contentMsgs) {
-    if(m.role === "user") textParts.push(`User: ${m.content}`);
-    if(m.role === "assistant") textParts.push(`Assistant: ${m.content}`);
-  }
-  const prompt = textParts.join("\n");
-
-  // Gemini expects [{role: "user", parts:[{text:...}]}...] format
-  let geminiMessages = messages.map(msg=>({
-    role: msg.role==="assistant"?"model":"user",
-    parts: [{text: msg.content}]
-  }));
-
-  // POST to Google API
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({contents: geminiMessages, generationConfig:{maxOutputTokens: 2048, temperature: 0.7}})
-  });
-  if(!response.ok) {
-    const errData = await response.json().catch(()=>({}));
-    throw new Error("Gemini Error: " + (errData.error?.message || response.statusText));
-  }
-  const data = await response.json();
-  const reply = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-  return {reply, usage:{}, timing:{}};
-}
 
 const ANTI_BOILERPLATE = `
 Do not repeat or rephrase the user's prompt in your answers.
@@ -86,66 +49,80 @@ async function getSuggestions(messages) {
 export async function handler(event) {
   const startTime = Date.now();
   try {
-    const { messages, model, geminiApiKey } = JSON.parse(event.body);
+    // ADD model here:
+    const { messages, model } = JSON.parse(event.body);
     if (!Array.isArray(messages)) throw new Error("No messages");
-    if (!model) throw new Error("No LLM model specified!");
 
-    // choose between OpenAI and Gemini
-    let reply, suggestions, usage={};
-    if (model.startsWith("gemini")) {
-      // --- Gemini ---
-      if(!geminiApiKey) throw new Error("Missing Gemini API key (client must send)");
-      const r = await fetchGemini({messages,model,apiKey:geminiApiKey});
-      reply = r.reply;
-      usage = r.usage;
-      // Suggestions: fallback (optionally, you might add Gemini suggestion generation too)
-      suggestions = ["", "", ""];
+    // Insert the anti-boilerplate system prompt at the start (after any topic system or before user)
+    let contextMsgs = messages.slice();
+    let systemIdx = contextMsgs.findIndex(m => m.role === "system");
+    if (systemIdx >= 0) {
+      contextMsgs.splice(systemIdx + 1, 0, { role: "system", content: ANTI_BOILERPLATE });
     } else {
-      // --- OpenAI as before ---
-      // ...EXISTING OpenAI HANDLING CODE...
-      // 1. Insert anti-boilerplate, call OpenAI completion, usage, suggestions etc
-      // copy/paste from your current OpenAI part...
-      let contextMsgs = messages.slice();
-      let systemIdx = contextMsgs.findIndex(m => m.role === "system");
-      if (systemIdx >= 0) {
-        contextMsgs.splice(systemIdx + 1, 0, { role: "system", content: ANTI_BOILERPLATE });
-      } else {
-        contextMsgs.unshift({ role: "system", content: ANTI_BOILERPLATE });
-      }
-      const useModel = model || "gpt-4.1";
-      const supportsTemperature = !/(gpt-5-2025-08-07|o3-mini|gpt-5.2|o3)/i.test(useModel);
-      const chatParams = {
-        model: useModel,
-        messages: contextMsgs,
-      };
-      if (supportsTemperature) {
-        chatParams.temperature = 0.7;
-      }
-      if (/(gpt-5-2025-08-07|o3-mini|gpt-5.2|o3)/i.test(useModel)) {
-        chatParams.max_completion_tokens = 8000;
-      } else {
-        chatParams.max_tokens = 8000;
-      }
-      const completion = await openai.chat.completions.create(chatParams);
-      reply = completion.choices[0].message.content;
-      usage = completion.usage || {};
-      const suggStart = Date.now();
-      const allMessages = [...messages, { role: "assistant", content: reply }];
-      suggestions = await getSuggestions(allMessages);
+      contextMsgs.unshift({ role: "system", content: ANTI_BOILERPLATE });
     }
 
-    // Compose reply as before
+    // 1. Get assistant reply
+    const llmStart = Date.now();
+    const useModel = model || "gpt-4.1";
+
+    // Only set temperature for models that allow varying it
+    // For GPT-5 and o3-mini, DO NOT send temperature param
+    const supportsTemperature = !/(gpt-5-2025-08-07|o3-mini|gpt-5.2|o3)/i.test(useModel);
+    const chatParams = {
+      model: useModel,
+      messages: contextMsgs,
+    };
+    if (supportsTemperature) {
+      chatParams.temperature = 0.7;
+    }
+
+    // Set correct max tokens parameter (OpenAI changed this for new models)
+    // Use max_completion_tokens for GPT-5 and O3 Mini, otherwise max_tokens
+    if (/(gpt-5-2025-08-07|o3-mini|gpt-5.2|o3)/i.test(useModel)) {
+      chatParams.max_completion_tokens = 8000;
+    } else {
+      chatParams.max_tokens = 8000;
+    }
+
+    const completion = await openai.chat.completions.create(chatParams);
+    
+    const llmEnd = Date.now();
+    const llmDuration = llmEnd - llmStart;
+
+    const reply = completion.choices[0].message.content;
+    const usage = completion.usage || {};
+
+    // 2. Get suggestions (include the new assistant reply in context)
+    const suggStart = Date.now();
+    const allMessages = [...messages, { role: "assistant", content: reply }];
+    const suggestions = await getSuggestions(allMessages);
+    const suggEnd = Date.now();
+    const suggDuration = suggEnd - suggStart;
+
+    const totalDuration = Date.now() - startTime;
+
+    // For troubleshooting: log to server log
+    console.log("LLM duration(ms):", llmDuration, "tokens:", usage);
+    console.log("Suggest duration(ms):", suggDuration, "total:", totalDuration);
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         reply,
         suggestions,
-        usage
+        usage, // {prompt_tokens, completion_tokens, total_tokens}
+        timing: {
+          llmDuration,   // ms GPT call
+          suggDuration,  // ms suggestions
+          totalDuration, // total ms
+        }
       }),
     };
   } catch (err) {
-    // ...as before...
+    console.error("chat.js ERROR:", err.stack || err);
+    // Optionally log event.body (omitted for privacy)
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },

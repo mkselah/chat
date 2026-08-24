@@ -11,14 +11,6 @@
   <!-- Top Auth Bar: only login/signup on this line -->
   <div id="authSection">
     <div id="authForm">
-      <div style="margin-top:0.7em;">
-        <label for="geminiApiKey" style="font-size: 0.97em;">
-          Gemini API Key:
-        </label>
-        <input id="geminiApiKey" type="password" placeholder="Paste Gemini API key..." style="width:210px;" />
-        <button id="saveGeminiKeyBtn">Save</button>
-        <span id="geminiKeyStatus" style="font-size:0.91em;"></span>
-      </div>
       <input id="authEmail" type="email" placeholder="Email" />
       <input id="authPassword" type="password" placeholder="Password" />
       <button id="loginBtn">Log In</button>
@@ -46,8 +38,6 @@
         <option value="gpt-5.2">GPT-5.2</option>
         <option value="o3-mini">O3 Mini</option>
         <option value="o3">O3</option>
-        <option value="gemini-1.5-flash">Gemini Flash</option>
-        <option value="gemini-1.5-pro">Gemini Pro</option>
       </select>
       <button id="logoutBtn" style="display:none; margin-left:auto;">Log Out</button>
     </div>

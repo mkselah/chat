@@ -19,8 +19,6 @@ const authStatus = document.getElementById("authStatus");
 const authForm = document.getElementById("authForm");
 const micBtn = document.getElementById("micBtn");
 
-let geminiApiKey = localStorage.getItem("geminiApiKey") || "";
-
 let topics = [];
 let messages = [];
 let activeTopicIdx = 0;
@@ -161,58 +159,6 @@ logoutBtn.onclick = async () => {
   lastSuggestions = {};
   renderAll();
   updateAuthUI();
-};
-
-const geminiApiKeyInput = document.getElementById("geminiApiKey");
-const saveGeminiKeyBtn = document.getElementById("saveGeminiKeyBtn");
-const geminiKeyStatus = document.getElementById("geminiKeyStatus");
-const modelDropdown = document.getElementById("modelDropdown");
-
-// ================ Gemini key UX for model dropdown ================
-modelDropdown.onchange = function() {
-  const isGemini = this.value.startsWith("gemini");
-  if (isGemini && !geminiApiKey) {
-    geminiApiKeyInput.focus();
-    geminiKeyStatus.textContent = "Paste your Gemini API key above!";
-    geminiKeyStatus.style.color = "red";
-    // Give user feedback visually (red border highlight input)
-    geminiApiKeyInput.style.border = "2px solid red";
-    setTimeout(() => {
-      geminiApiKeyInput.style.border = "";
-    }, 1800);
-  } else {
-    geminiKeyStatus.textContent = "";
-    geminiKeyStatus.style.color = "";
-    geminiApiKeyInput.style.border = "";
-  }
-};
-
-// On load, put key in the input field (but not in value attribute password for safety, clear after)
-window.addEventListener("DOMContentLoaded", ()=>{
-  geminiApiKeyInput.value = geminiApiKey ? "••••••••••••••" : "";
-});
-
-saveGeminiKeyBtn.onclick = ()=>{
-  if(geminiApiKeyInput.value && geminiApiKeyInput.value.startsWith("AI")) {
-    geminiApiKey = geminiApiKeyInput.value.trim();
-    localStorage.setItem("geminiApiKey", geminiApiKey);
-    geminiKeyStatus.textContent = "Gemini key saved!";
-    geminiApiKeyInput.value = "••••••••••••••";
-    setTimeout(()=>geminiKeyStatus.textContent="", 1500);
-  } else {
-    geminiKeyStatus.textContent = "Paste a valid Gemini API key!";
-  }
-};
-
-// Optional: allow clearing key by double-click
-geminiApiKeyInput.ondblclick = ()=>{
-  geminiApiKeyInput.type = "text";
-  geminiApiKeyInput.value = "";
-  geminiApiKeyInput.type = "password";
-  geminiApiKey = "";
-  localStorage.removeItem("geminiApiKey");
-  geminiKeyStatus.textContent = "Key cleared";
-  setTimeout(()=>geminiKeyStatus.textContent="", 1200);
 };
 
 // =======================
@@ -681,28 +627,11 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
     [{ role: "user", content: suggestionText }]
   );
   // Call Netlify function
-  const selectedModel = modelDropdown.value; // Make sure you use the current dropdown value!
-const isGemini = selectedModel.startsWith("gemini");
-const reqBody = { messages: contextMessages, model: selectedModel };
-if(isGemini) {
-  if (!geminiApiKey) {
-    geminiApiKeyInput.focus();
-    geminiKeyStatus.textContent = "Paste your Gemini API key above!";
-    geminiKeyStatus.style.color = "red";
-    geminiApiKeyInput.style.border = "2px solid red";
-    setTimeout(() => {
-      geminiApiKeyInput.style.border = "";
-      geminiKeyStatus.textContent = "";
-    }, 1600);
-    return;
-  }
-  reqBody.geminiApiKey = geminiApiKey;
-}
-const resp = await fetch("/.netlify/functions/chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(reqBody),
-});
+  const resp = await fetch("/.netlify/functions/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: contextMessages }),
+  });
   const json = await resp.json();
   if (json.reply) {
     // Add assistant message to DB
@@ -751,29 +680,11 @@ chatForm.onsubmit = async (e) => {
   // Build context messages
   const currentModel = (topics[activeTopicIdx] && topics[activeTopicIdx].model) || "gpt-4.1";
   const contextMessages = messages.concat([{ role: "user", content: text }]);
-  const selectedModel = modelDropdown.value; // e.g., "gemini-1.5-pro" or "gpt-4.1"
-  const isGemini = selectedModel.startsWith("gemini");
-
-  // Prompt for missing Gemini key (extra guard)
-  if (isGemini && !geminiApiKey) {
-    geminiApiKeyInput.focus();
-    geminiKeyStatus.textContent = "Paste your Gemini API key above!";
-    geminiKeyStatus.style.color = "red";
-    geminiApiKeyInput.style.border = "2px solid red";
-    setTimeout(() => {
-      geminiApiKeyInput.style.border = "";
-      geminiKeyStatus.textContent = "";
-    }, 1600);
-    return;
-  }
-
-  const reqBody = { messages: contextMessages, model: selectedModel };
-  if (isGemini) reqBody.geminiApiKey = geminiApiKey;
-
+  const selectedModel = modelDropdown.value; // <-- get value
   const resp = await fetch("/.netlify/functions/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(reqBody),
+    body: JSON.stringify({ messages: contextMessages, model: selectedModel }),
   });
   const json = await resp.json();
   if (json.reply) {
