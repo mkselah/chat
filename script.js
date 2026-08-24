@@ -19,6 +19,8 @@ const authStatus = document.getElementById("authStatus");
 const authForm = document.getElementById("authForm");
 const micBtn = document.getElementById("micBtn");
 
+let geminiApiKey = localStorage.getItem("geminiApiKey") || "";
+
 let topics = [];
 let messages = [];
 let activeTopicIdx = 0;
@@ -159,6 +161,38 @@ logoutBtn.onclick = async () => {
   lastSuggestions = {};
   renderAll();
   updateAuthUI();
+};
+
+const geminiApiKeyInput = document.getElementById("geminiApiKey");
+const saveGeminiKeyBtn = document.getElementById("saveGeminiKeyBtn");
+const geminiKeyStatus = document.getElementById("geminiKeyStatus");
+
+// On load, put key in the input field (but not in value attribute password for safety, clear after)
+window.addEventListener("DOMContentLoaded", ()=>{
+  geminiApiKeyInput.value = geminiApiKey ? "••••••••••••••" : "";
+});
+
+saveGeminiKeyBtn.onclick = ()=>{
+  if(geminiApiKeyInput.value && geminiApiKeyInput.value.startsWith("AI")) {
+    geminiApiKey = geminiApiKeyInput.value.trim();
+    localStorage.setItem("geminiApiKey", geminiApiKey);
+    geminiKeyStatus.textContent = "Gemini key saved!";
+    geminiApiKeyInput.value = "••••••••••••••";
+    setTimeout(()=>geminiKeyStatus.textContent="", 1500);
+  } else {
+    geminiKeyStatus.textContent = "Paste a valid Gemini API key!";
+  }
+};
+
+// Optional: allow clearing key by double-click
+geminiApiKeyInput.ondblclick = ()=>{
+  geminiApiKeyInput.type = "text";
+  geminiApiKeyInput.value = "";
+  geminiApiKeyInput.type = "password";
+  geminiApiKey = "";
+  localStorage.removeItem("geminiApiKey");
+  geminiKeyStatus.textContent = "Key cleared";
+  setTimeout(()=>geminiKeyStatus.textContent="", 1200);
 };
 
 // =======================
@@ -680,12 +714,23 @@ chatForm.onsubmit = async (e) => {
   // Build context messages
   const currentModel = (topics[activeTopicIdx] && topics[activeTopicIdx].model) || "gpt-4.1";
   const contextMessages = messages.concat([{ role: "user", content: text }]);
-  const selectedModel = modelDropdown.value; // <-- get value
-  const resp = await fetch("/.netlify/functions/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: contextMessages, model: selectedModel }),
-  });
+  const selectedModel = modelDropdown.value; // e.g., "gemini-pro" or "gpt-4.1"
+const isGemini = selectedModel.startsWith("gemini");
+
+const reqBody = { messages: contextMessages, model: selectedModel };
+if (isGemini) {
+  if (!geminiApiKey) {
+    alert("You must set a Gemini API key for these models.");
+    return;
+  }
+  reqBody.geminiApiKey = geminiApiKey;
+}
+
+const resp = await fetch("/.netlify/functions/chat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(reqBody),
+});
   const json = await resp.json();
   if (json.reply) {
     await addMessage("assistant", json.reply);
