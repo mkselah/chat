@@ -1,10 +1,10 @@
 import { OpenAI } from "openai";
 import fetch from "node-fetch"; // <-- Needed for Gemini fetch
 // ^^^ If Netlify doesn't natively have fetch in Node, do: npm i node-fetch
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const GEMINI_API_KEY = process.env.Gemini_API_Key; // Your Gemini Netlify env var
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY; // Your Claude Netlify env var
 
 const ANTI_BOILERPLATE = `
 Do not repeat or rephrase the user's prompt in your answers.
@@ -88,10 +88,45 @@ async function geminiChat(messages) {
   const data = await resp.json();
   const reply = data.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n\n");
   if (!reply) throw new Error("Gemini did not return an answer.");
-
   return { reply };
 }
-
+// --- CLAUDE (ANTHROPIC) LLM CALLER ---
+async function claudeChat(messages, modelId) {
+  if (!ANTHROPIC_API_KEY) throw new Error("Missing ANTHROPIC_API_KEY");
+  // Anthropic wants system prompt separate from the messages array
+  const systemMsg = messages.find(m => m.role === "system");
+  const systemPrompt = systemMsg ? systemMsg.content : undefined;
+  // Anthropic only accepts role "user" or "assistant"
+  const claudeMsgs = messages
+    .filter(m => m.role !== "system")
+    .map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content
+    }));
+  const payload = {
+    model: modelId,
+    max_tokens: 4096,
+    messages: claudeMsgs,
+    ...(systemPrompt && { system: systemPrompt })
+  };
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    const errJson = await resp.json().catch(() => ({}));
+    throw new Error("Claude API: " + (errJson.error?.message || resp.statusText));
+  }
+  const data = await resp.json();
+  const reply = data.content?.map(c => c.text).join("\n\n");
+  if (!reply) throw new Error("Claude did not return an answer.");
+  return { reply };
+}
 export async function handler(event) {
   const startTime = Date.now();
   try {
@@ -117,6 +152,13 @@ export async function handler(event) {
       timing.llmDuration = Date.now() - llmStart;
       reply = geminiResult.reply;
       // Usage estimation: Not provided by Gemini, so leave usage empty
+    } else if (/^claude/i.test(useModel)) {
+      // Use Claude (Anthropic)
+      const llmStart = Date.now();
+      const claudeResult = await claudeChat(contextMsgs, useModel);
+      timing.llmDuration = Date.now() - llmStart;
+      reply = claudeResult.reply;
+      // Usage estimation: not parsed here, leave usage empty
     } else {
       // Use OpenAI as before
       const llmStart = Date.now();
