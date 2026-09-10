@@ -163,10 +163,11 @@ export async function handler(event) {
       // Use OpenAI as before
       const llmStart = Date.now();
 
-      const supportsTemperature = !/(gpt-5-2025-08-07|o3-mini|gpt-5.2|o3)/i.test(useModel);
+      const NEEDS_COMPLETION_TOKENS = /(gpt-5-2025-08-07|o3-mini|gpt-5\.2|o3|gpt-6-astra)/i;
+      const supportsTemperature = !NEEDS_COMPLETION_TOKENS.test(useModel);
       const chatParams = { model: useModel, messages: contextMsgs };
       if (supportsTemperature) chatParams.temperature = 0.7;
-      if (/(gpt-5-2025-08-07|o3-mini|gpt-5.2|o3)/i.test(useModel)) {
+      if (NEEDS_COMPLETION_TOKENS.test(useModel)) {
         chatParams.max_completion_tokens = 8000;
       } else {
         chatParams.max_tokens = 8000;
