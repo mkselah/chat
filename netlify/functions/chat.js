@@ -163,7 +163,7 @@ export async function handler(event) {
       // Use OpenAI as before
       const llmStart = Date.now();
 
-      const NEEDS_COMPLETION_TOKENS = /(gpt-5-2025-08-07|o3-mini|gpt-5\.2|o3|gpt-6-astra)/i;
+      const NEEDS_COMPLETION_TOKENS = /(gpt-5-2025-08-07|o3-mini|gpt-5\.2|o3|gpt-6-astra|gpt-5\.5-2026-04-23)/i;
       const supportsTemperature = !NEEDS_COMPLETION_TOKENS.test(useModel);
       const chatParams = { model: useModel, messages: contextMsgs };
       if (supportsTemperature) chatParams.temperature = 0.7;
