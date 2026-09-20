@@ -91,7 +91,19 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   micBtn.title = "Speech-to-text not supported in this browser";
 }
 // ======== END Speech Recognition =========
-
+// ======== Scroll Helpers (manual-scroll friendly) =========
+// Only auto-scroll to bottom if the user is already near the bottom.
+// This lets users scroll up manually to read without being pulled back down
+// while new content streams in.
+function isNearBottom(el, threshold = 100) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+}
+function scrollToBottomIfNear(el) {
+  if (isNearBottom(el)) {
+    el.scrollTop = el.scrollHeight;
+  }
+}
+// ======== END Scroll Helpers =========
 // --- Add to script.js: splits long text into ~1000 char chunks at ".", "!", "?"
 function splitTextIntoChunks(text, charLimit = 1000) {
   if (text.length <= charLimit) return [text];
@@ -520,7 +532,7 @@ function renderChat() {
     }
     // End suggestions
   });
-  chatWindow.scrollTop = chatWindow.scrollHeight;
+  scrollToBottomIfNear(chatWindow);
 }
 
 // ======= Download TTS as concatenated MP3 file =======
@@ -674,7 +686,7 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
   streamDiv.className = 'assistant';
   streamDiv.textContent = '';
   chatWindow.appendChild(streamDiv);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
+  scrollToBottomIfNear(chatWindow);
   const contextMessages = messages.concat(
     [{ role: "user", content: suggestionText }]
   );
@@ -686,7 +698,7 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
       } else {
         streamDiv.textContent = partial;
       }
-      chatWindow.scrollTop = chatWindow.scrollHeight;
+      scrollToBottomIfNear(chatWindow);
     },
     onDone: async (fullReply, meta) => {
       await addMessage("assistant", fullReply);
@@ -734,7 +746,7 @@ chatForm.onsubmit = async (e) => {
   streamDiv.className = 'assistant';
   streamDiv.textContent = '';
   chatWindow.appendChild(streamDiv);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
+  scrollToBottomIfNear(chatWindow);
   const contextMessages = messages.concat([{ role: "user", content: text }]);
   const selectedModel = modelDropdown.value;
   await streamChat(contextMessages, selectedModel, {
@@ -744,7 +756,7 @@ chatForm.onsubmit = async (e) => {
       } else {
         streamDiv.textContent = partial;
       }
-      chatWindow.scrollTop = chatWindow.scrollHeight;
+      scrollToBottomIfNear(chatWindow);
     },
     onDone: async (fullReply, meta) => {
       await addMessage("assistant", fullReply);
