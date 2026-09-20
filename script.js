@@ -109,6 +109,56 @@ function splitTextIntoChunks(text, charLimit = 1000) {
   if (current) chunks.push(current);
   return chunks;
 }
+// =======================
+// STREAMING CHAT HELPER
+// =======================
+const META_MARKER = "\u0000__META__\u0000";
+async function streamChat(contextMessages, model, { onChunk, onDone, onError }) {
+  let reply = "";
+  let metaBuffer = "";
+  let sawMeta = false;
+  try {
+    const resp = await fetch("/.netlify/functions/chat-stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: contextMessages, model }),
+    });
+    if (!resp.ok || !resp.body) {
+      const errJson = await resp.json().catch(() => ({}));
+      throw new Error(errJson.error || "Request failed");
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunkText = decoder.decode(value, { stream: true });
+      if (!sawMeta) {
+        const idx = chunkText.indexOf(META_MARKER);
+        if (idx === -1) {
+          reply += chunkText;
+          onChunk(reply);
+        } else {
+          reply += chunkText.slice(0, idx);
+          onChunk(reply);
+          metaBuffer += chunkText.slice(idx + META_MARKER.length);
+          sawMeta = true;
+        }
+      } else {
+        metaBuffer += chunkText;
+      }
+    }
+    let meta = {};
+    try { meta = metaBuffer ? JSON.parse(metaBuffer) : {}; } catch (e) { meta = {}; }
+    if (meta.error && !reply) {
+      onError(meta.error);
+    } else {
+      onDone(reply, meta);
+    }
+  } catch (err) {
+    onError(err.message || "Unknown error");
+  }
+}
 
 // =======================
 // AUTH LOGIC
@@ -619,32 +669,37 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
   await addMessage("user", suggestionText);
   userInput.value = '';
   autoGrow(userInput);
-  chatWindow.innerHTML += "<div class='system'>Thinking…</div>";
+  // Live-updating bubble while the reply streams in
+  const streamDiv = document.createElement('div');
+  streamDiv.className = 'assistant';
+  streamDiv.textContent = '';
+  chatWindow.appendChild(streamDiv);
   chatWindow.scrollTop = chatWindow.scrollHeight;
-
-  // Build context messages: all up to and incl current
   const contextMessages = messages.concat(
     [{ role: "user", content: suggestionText }]
   );
-  // Call Netlify function
-  const resp = await fetch("/.netlify/functions/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: contextMessages }),
+  const selectedModel = modelDropdown.value;
+  await streamChat(contextMessages, selectedModel, {
+    onChunk: (partial) => {
+      if (window.markdownit) {
+        streamDiv.innerHTML = window.markdownit().render(partial);
+      } else {
+        streamDiv.textContent = partial;
+      }
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    },
+    onDone: async (fullReply, meta) => {
+      await addMessage("assistant", fullReply);
+      await loadMessages();
+      const lastMsg = messages[messages.length - 1];
+      lastSuggestions[lastMsg.id] = (meta && meta.suggestions) || ["", "", ""];
+      renderAll();
+    },
+    onError: (errMsg) => {
+      streamDiv.remove();
+      chatWindow.innerHTML += "<div class='system'>Error: " + errMsg + "</div>";
+    }
   });
-  const json = await resp.json();
-  if (json.reply) {
-    // Add assistant message to DB
-    await addMessage("assistant", json.reply);
-    // Store new suggestions for that message
-    // We'll use the last message's id (will be loaded via addMessage)
-    await loadMessages(); // will update messages with new assistant
-    const lastMsg = messages[messages.length - 1];
-    lastSuggestions[lastMsg.id] = json.suggestions || ["", "", ""];
-    renderAll();
-  } else {
-    chatWindow.innerHTML += "<div class='system'>Error: "+(json.error||"Unknown")+"</div>";
-  }
 }
 
 function renderAll() {
@@ -674,29 +729,35 @@ chatForm.onsubmit = async (e) => {
   await addMessage("user", text);
   userInput.value = '';
   autoGrow(userInput);
-  chatWindow.innerHTML += "<div class='system'>Thinking…</div>";
+  // Live-updating bubble while the reply streams in
+  const streamDiv = document.createElement('div');
+  streamDiv.className = 'assistant';
+  streamDiv.textContent = '';
+  chatWindow.appendChild(streamDiv);
   chatWindow.scrollTop = chatWindow.scrollHeight;
-
-  // Build context messages
-  const currentModel = (topics[activeTopicIdx] && topics[activeTopicIdx].model) || "gpt-4.1";
   const contextMessages = messages.concat([{ role: "user", content: text }]);
-  const selectedModel = modelDropdown.value; // <-- get value
-  const resp = await fetch("/.netlify/functions/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: contextMessages, model: selectedModel }),
+  const selectedModel = modelDropdown.value;
+  await streamChat(contextMessages, selectedModel, {
+    onChunk: (partial) => {
+      if (window.markdownit) {
+        streamDiv.innerHTML = window.markdownit().render(partial);
+      } else {
+        streamDiv.textContent = partial;
+      }
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    },
+    onDone: async (fullReply, meta) => {
+      await addMessage("assistant", fullReply);
+      await loadMessages();
+      const lastMsg = messages[messages.length - 1];
+      lastSuggestions[lastMsg.id] = (meta && meta.suggestions) || ["", "", ""];
+      renderAll();
+    },
+    onError: (errMsg) => {
+      streamDiv.remove();
+      chatWindow.innerHTML += "<div class='system'>Error: " + errMsg + "</div>";
+    }
   });
-  const json = await resp.json();
-  if (json.reply) {
-    await addMessage("assistant", json.reply);
-    // Save the suggestions with this message ID (but only after re-loading messages to get the new ID)
-    await loadMessages();
-    const lastMsg = messages[messages.length-1];
-    lastSuggestions[lastMsg.id] = json.suggestions || ["", "", ""];
-    renderAll();
-  } else {
-    chatWindow.innerHTML += "<div class='system'>Error: "+(json.error||"Unknown")+"</div>";
-  }
 };
 
 const showSheetBtn = document.getElementById("showSheetBtn");
