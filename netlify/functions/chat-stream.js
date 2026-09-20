@@ -181,7 +181,7 @@ export default async (req, context) => {
   } else {
     contextMsgs.unshift({ role: "system", content: ANTI_BOILERPLATE });
   }
-  const useModel = model || "gpt-4.1";
+  const useModel = model || "gemini-3.8-flash";
   const stream = new ReadableStream({
     async start(controller) {
       let fullReply = "";

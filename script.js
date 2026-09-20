@@ -240,7 +240,7 @@ async function loadMessages() {
 
 async function saveTopic(name) {
   if (!user) return;
-  let currentModel = document.getElementById("modelDropdown").value || "gpt-4.1";
+  let currentModel = document.getElementById("modelDropdown").value || "gemini-3.8-flash";
   let { data, error } = await supabase
     .from('topics')
     .insert({ name, user_id: user.id, model: currentModel })
@@ -255,7 +255,7 @@ async function saveTopic(name) {
 async function renameTopic(idx, name) {
   if (!user || !topics[idx]) return;
   let id = topics[idx].id;
-  let newModel = document.getElementById("modelDropdown").value || "gpt-4.1";
+  let newModel = document.getElementById("modelDropdown").value || "gemini-3.8-flash";
   let { error } = await supabase
     .from('topics')
     .update({ name, model: newModel })
@@ -327,8 +327,8 @@ function renderTopicsDropdown() {
 }
 topicDropdown.onchange = async function () {
   activeTopicIdx = parseInt(this.value);
-  // Set modelDropdown to this topic's model, default to GPT-4.1 if missing
-  const topicModel = topics[activeTopicIdx]?.model || "gpt-4.1";
+  // Set modelDropdown to this topic's model, default to Gemini 3.8 Flash if missing
+  const topicModel = topics[activeTopicIdx]?.model || "gemini-3.8-flash";
   modelDropdown.value = topicModel;
   await loadMessages();
   renderAll();

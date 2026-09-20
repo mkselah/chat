@@ -3,7 +3,7 @@ import fetch from "node-fetch"; // <-- Needed for Gemini fetch
 // ^^^ If Netlify doesn't natively have fetch in Node, do: npm i node-fetch
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const GEMINI_API_KEY = process.env.Gemini_API_Key; // Your Gemini Netlify env var
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY; // Your Claude Netlify env var
 
 const ANTI_BOILERPLATE = `
@@ -48,13 +48,12 @@ async function getSuggestions(messages) {
 }
 
 // --- GEMINI LLM CALLER ---
-async function geminiChat(messages) {
+async function geminiChat(messages, modelName) {
   // Extract system prompt if present
   const systemMsg = messages.find(m => m.role === "system");
   const systemInstruction = systemMsg 
     ? { parts: [{ text: systemMsg.content }] } 
     : undefined;
-
   // Filter out system messages from contents array
   const geminiMsgs = messages
     .filter(m => m.role !== "system")
@@ -62,29 +61,23 @@ async function geminiChat(messages) {
       role: msg.role === "assistant" ? "model" : "user",
       parts: [{ text: msg.content }]
     }));
-
   const payload = {
     contents: geminiMsgs,
     ...(systemInstruction && { systemInstruction })
   };
-
   if (!GEMINI_API_KEY) throw new Error("Missing Gemini_API_Key");
-  
-  // Dynamic model fallback matching
-  let modelName = "gemini-3.6-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
+  // Use whichever Gemini model was selected in the dropdown; default to gemini-3.8-flash
+  const useModelName = modelName || "gemini-3.8-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModelName}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
   if (!resp.ok) {
     const errJson = await resp.json();
     throw new Error("Gemini API: " + (errJson.error?.message || resp.statusText));
   }
-
   const data = await resp.json();
   const reply = data.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n\n");
   if (!reply) throw new Error("Gemini did not return an answer.");
@@ -142,13 +135,12 @@ export async function handler(event) {
     }
 
     // Which model?
-    const useModel = model || "gpt-4.1";
+    const useModel = model || "gemini-3.8-flash";
     let reply = "", usage = {}, timing = {};
-
     if (/^gemini/i.test(useModel)) {
       // Use Gemini
       const llmStart = Date.now();
-      const geminiResult = await geminiChat(contextMsgs);
+      const geminiResult = await geminiChat(contextMsgs, useModel);
       timing.llmDuration = Date.now() - llmStart;
       reply = geminiResult.reply;
       // Usage estimation: Not provided by Gemini, so leave usage empty
