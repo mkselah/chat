@@ -130,7 +130,7 @@ async function streamChat(contextMessages, model, { onChunk, onDone, onError }) 
   let metaBuffer = "";
   let sawMeta = false;
   try {
-    const resp = await fetch("/.netlify/functions/chat-stream", {
+    const resp = await fetch("/api/chat-stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: contextMessages, model }),
@@ -165,7 +165,6 @@ async function streamChat(contextMessages, model, { onChunk, onDone, onError }) 
       if (!line.trim()) continue;
       try { Object.assign(meta, JSON.parse(line)); } catch (e) {}
     }
-    // Cut off = server never confirmed the end (timeout) OR model hit its token limit
     meta.truncated = !meta.replyDone || ["max_tokens", "MAX_TOKENS", "length"].includes(meta.stopReason);
     if (meta.error && !reply) {
       onError(meta.error);
@@ -173,12 +172,14 @@ async function streamChat(contextMessages, model, { onChunk, onDone, onError }) 
       onDone(reply, meta);
     }
   } catch (err) {
-    onError(err.message || "Unknown error");
+    if (reply) {
+      onDone(reply, { truncated: true });
+    } else {
+      onError(err.message || "Unknown error");
+    }
   }
 }
-// =======================
-// AUTO-CONTINUE: if a reply is cut off, ask the model to continue and join the parts
-// =======================
+
 const CONTINUE_PROMPT = "Your previous answer was cut off. Continue exactly where it stopped. Do not repeat anything and do not add any introduction.";
 async function streamChatWithContinue(contextMessages, model, { onChunk, onDone, onError }, maxContinues = 3) {
   let soFar = "";
