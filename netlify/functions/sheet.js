@@ -1,6 +1,6 @@
 // Allowed sheets (key -> Google Sheet ID)
 const SHEETS = {
-  Activities: '1--DZT_bx8dNgAPyYlLKM7IjYbKkFoHhG9UDId-3y9cA',
+  Activities: '18EByyIETsXTqVUO5dSPXoDCfU_5zYQnmroNNEPX8GlE',
   FootballSessions: '1U2ZmiGJfotFVYGRGytANJosiWQJHJcMSSoMzP4DUU4Q',
   HiddenPotential: '1pRSSMA6oWZDkuIwaXmPXA9CivUhCw5jqL68MLPTQYWU'
 };
