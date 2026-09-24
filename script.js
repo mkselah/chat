@@ -774,29 +774,71 @@ chatForm.onsubmit = async (e) => {
 
 const showSheetBtn = document.getElementById("showSheetBtn");
 const sheetDataDiv = document.getElementById("sheetData");
-
-showSheetBtn.onclick = async function() {
-  const resp = await fetch("/.netlify/functions/sheet");
-  const rows = await resp.json();
-  if (!rows || rows.error) {
-    alert("Error loading sheet: " + (rows.error || "Unknown"));
+// Sheets to choose from (key must match SHEETS in netlify/functions/sheet.js)
+const SHEET_CHOICES = [
+  { key: "bbb", label: "bbb" },
+  { key: "aaa", label: "aaa" },
+  { key: "hidden", label: "hidden potential" },
+];
+// Click 📄 -> show/hide the chooser
+showSheetBtn.onclick = function() {
+  if (sheetDataDiv.style.display !== "none") {
+    sheetDataDiv.style.display = "none";
     return;
   }
-  if (!rows.length) {
-    alert("No data in sheet.");
-    return;
+  sheetDataDiv.innerHTML = "";
+  const label = document.createElement("span");
+  label.textContent = "Load sheet:";
+  label.style.marginRight = "4px";
+  sheetDataDiv.appendChild(label);
+  for (const choice of SHEET_CHOICES) {
+    const btn = document.createElement("button");
+    btn.type = "button"; // important: don't submit the chat form
+    btn.textContent = choice.label;
+    btn.style.padding = "0.3em 0.9em";
+    btn.style.fontSize = "0.95em";
+    btn.onclick = () => loadSheet(choice.key, choice.label);
+    sheetDataDiv.appendChild(btn);
   }
-  // Compose as text (tab-separated, one row per line)
-  const headers = Object.keys(rows[0]);
-  let text = headers.join("\t") + "\n";
-  for (const row of rows) {
-    text += headers.map(h => row[h]).join("\t") + "\n";
-  }
-  // Insert into userInput area (keeping any previous value and putting caret at end)
-  userInput.value = text + "\n" + userInput.value;
-  autoGrow(userInput);
-  userInput.focus();
+  sheetDataDiv.style.display = "flex";
 };
+// Fetch the chosen sheet and insert it into the input box
+async function loadSheet(key, label) {
+  sheetDataDiv.innerHTML = "<span>Loading " + label + "…</span>";
+  try {
+    const resp = await fetch("/.netlify/functions/sheet?sheet=" + encodeURIComponent(key));
+    const data = await resp.json();
+    if (!data || data.error) {
+      alert("Error loading sheet: " + ((data && data.error) || "Unknown"));
+      return;
+    }
+    if (!data.rows || !data.rows.length) {
+      alert("No data in sheet.");
+      return;
+    }
+    // Compose as pipe-separated table (markdown style), one row per line.
+    // Every row has exactly the same number of cells, so empty cells keep their position.
+    const clean = v => (String(v ?? "").trim() === "" ? "–" : String(v))
+      .replace(/\r?\n/g, " ")   // line breaks inside a cell -> space
+      .replace(/\|/g, "\\|")    // escape pipes inside a cell
+      .trim();
+    const line = cells => "| " + cells.map(clean).join(" | ") + " |";
+    let text = "Sheet: " + label + " (" + data.headers.length + " columns, separated by |, empty cells are blank)\n";
+    text += line(data.headers) + "\n";
+    text += "|" + data.headers.map(() => "---").join("|") + "|\n";
+    for (const row of data.rows) {
+      text += line(row) + "\n";
+    }
+    // Insert into userInput area (keeping any previous value)
+    userInput.value = text + "\n" + userInput.value;
+    autoGrow(userInput);
+    userInput.focus();
+  } catch (e) {
+    alert("Error loading sheet: " + (e.message || e));
+  } finally {
+    sheetDataDiv.style.display = "none";
+  }
+}
 
 // ==== INIT ===
 window.onload = async () => {
