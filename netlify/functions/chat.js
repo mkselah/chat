@@ -28,9 +28,8 @@ async function getSuggestions(messages) {
     }
   ];
   const suggestionResp = await openai.chat.completions.create({
-    model: "gpt-4.1",
+    model: "gpt-5.5-2026-04-23",
     messages: suggestionPrompt,
-    temperature: 0.65,
     max_tokens: 140,
   });
   let suggestions = [];
@@ -98,7 +97,7 @@ async function claudeChat(messages, modelId) {
     }));
   const payload = {
     model: modelId,
-    max_tokens: 4096,
+    max_tokens: 20000,
     messages: claudeMsgs,
     ...(systemPrompt && { system: systemPrompt })
   };
@@ -160,9 +159,9 @@ export async function handler(event) {
       const chatParams = { model: useModel, messages: contextMsgs };
       if (supportsTemperature) chatParams.temperature = 0.7;
       if (NEEDS_COMPLETION_TOKENS.test(useModel)) {
-        chatParams.max_completion_tokens = 8000;
+        chatParams.max_completion_tokens = 20000;
       } else {
-        chatParams.max_tokens = 8000;
+        chatParams.max_tokens = 20000;
       }
       const completion = await openai.chat.completions.create(chatParams);
       timing.llmDuration = Date.now() - llmStart;
