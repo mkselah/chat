@@ -418,7 +418,29 @@ function copyToClipboard(text) {
     document.body.removeChild(textarea);
   }
 }
-// ===== END COPY BUTTON FEATURE =======
+// ====== GOOGLE CALENDAR BUTTON FEATURE ======
+// Opens Google Calendar with a pre-filled event (no API key needed).
+// You check the details in Google Calendar and click "Save".
+const GCAL_MAX_DETAILS = 1500; // keep the URL short enough for Google
+function addToGoogleCalendar(text) {
+  const title = topics[activeTopicIdx] ? topics[activeTopicIdx].name : "Chat note";
+  // All-day event today (date/time can be changed in Google Calendar before saving)
+  const d = new Date();
+  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  const fmt = x => x.getFullYear() + String(x.getMonth() + 1).padStart(2, "0") + String(x.getDate()).padStart(2, "0");
+  let details = text;
+  if (details.length > GCAL_MAX_DETAILS) {
+    details = details.slice(0, GCAL_MAX_DETAILS) + "\n\n…(text shortened – full text is copied to your clipboard, paste it here)";
+    copyToClipboard(text);
+  }
+  const url = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+    + "&text=" + encodeURIComponent(title)
+    + "&dates=" + fmt(d) + "/" + fmt(next)
+    + "&details=" + encodeURIComponent(details);
+  const win = window.open(url, "_blank");
+  if (!win) window.location.href = url; // fallback if popup was blocked
+}
+// ===== END GOOGLE CALENDAR BUTTON FEATURE =======
 
 // === MODIFIED: Chat area w/ delete message support and suggestion buttons and LISTEN BUTTON and COPY BUTTON ===
 function renderChat() {
@@ -516,7 +538,13 @@ function renderChat() {
         setTimeout(() => { copyBtn.textContent = "📋"; }, 1200);
       };
       actionRow.appendChild(copyBtn);
-
+      // ===== Google Calendar Button - NEW! =====
+      const calBtn = document.createElement('button');
+      calBtn.textContent = "📅";
+      calBtn.title = "Add this message to Google Calendar";
+      calBtn.className = "calendar-btn";
+      calBtn.onclick = () => addToGoogleCalendar(msg.content);
+      actionRow.appendChild(calBtn);
       // Delete button
       const delBtn = document.createElement('button');
       delBtn.textContent = "🗑️";
@@ -543,7 +571,13 @@ function renderChat() {
         setTimeout(() => { copyBtn.textContent = "📋"; }, 1200);
       };
       actionRow.appendChild(copyBtn);
-
+      // ===== Google Calendar Button - NEW! =====
+      const calBtn = document.createElement('button');
+      calBtn.textContent = "📅";
+      calBtn.title = "Add this message to Google Calendar";
+      calBtn.className = "calendar-btn";
+      calBtn.onclick = () => addToGoogleCalendar(msg.content);
+      actionRow.appendChild(calBtn);
       const delBtn = document.createElement('button');
       delBtn.textContent = "🗑️";
       delBtn.title = "Delete this message";

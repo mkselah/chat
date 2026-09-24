@@ -319,3 +319,20 @@ body {
 .copy-btn:active {
   background: #bed8ff;
 }
+.calendar-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1em;
+  opacity: 0.62;
+  padding: 0.15em 0.45em;
+  border-radius: 6px;
+  transition: opacity 0.17s, background 0.18s;
+}
+.calendar-btn:hover {
+  opacity: 1;
+  background: #e7eefa;
+}
+.calendar-btn:active {
+  background: #bed8ff;
+}
