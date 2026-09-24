@@ -776,7 +776,7 @@ const showSheetBtn = document.getElementById("showSheetBtn");
 const sheetDataDiv = document.getElementById("sheetData");
 // Sheets to choose from (key must match SHEETS in netlify/functions/sheet.js)
 const SHEET_CHOICES = [
-  { key: "bbb", label: "bbb" },
+  { key: "Activities", label: "Activities" },
   { key: "FootballSessions", label: "Football Sessions" },
   { key: "HiddenPotential", label: "Hidden Potential" },
 ];
