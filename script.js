@@ -161,7 +161,12 @@ async function streamChat(contextMessages, model, { onChunk, onDone, onError }) 
       }
     }
     let meta = {};
-    try { meta = metaBuffer ? JSON.parse(metaBuffer) : {}; } catch (e) { meta = {}; }
+    for (const line of metaBuffer.split("\n")) {
+      if (!line.trim()) continue;
+      try { Object.assign(meta, JSON.parse(line)); } catch (e) {}
+    }
+    // Cut off = server never confirmed the end (timeout) OR model hit its token limit
+    meta.truncated = !meta.replyDone || ["max_tokens", "MAX_TOKENS", "length"].includes(meta.stopReason);
     if (meta.error && !reply) {
       onError(meta.error);
     } else {
@@ -171,7 +176,40 @@ async function streamChat(contextMessages, model, { onChunk, onDone, onError }) 
     onError(err.message || "Unknown error");
   }
 }
-
+// =======================
+// AUTO-CONTINUE: if a reply is cut off, ask the model to continue and join the parts
+// =======================
+const CONTINUE_PROMPT = "Your previous answer was cut off. Continue exactly where it stopped. Do not repeat anything and do not add any introduction.";
+async function streamChatWithContinue(contextMessages, model, { onChunk, onDone, onError }, maxContinues = 3) {
+  let soFar = "";
+  let msgs = contextMessages;
+  for (let attempt = 0; attempt <= maxContinues; attempt++) {
+    let result = null;
+    await streamChat(msgs, model, {
+      onChunk: (partial) => onChunk(soFar + partial),
+      onDone: (reply, meta) => { result = { reply, meta }; },
+      onError: (err) => { result = { error: err }; }
+    });
+    if (result.error) {
+      if (soFar) await onDone(soFar + "\n\n*(Response was cut off)*", {});
+      else onError(result.error);
+      return;
+    }
+    soFar += result.reply;
+    if (!result.meta.truncated) {
+      await onDone(soFar, result.meta);
+      return;
+    }
+    if (attempt === maxContinues) {
+      await onDone(soFar + "\n\n*(Response was cut off)*", result.meta);
+      return;
+    }
+    msgs = contextMessages.concat([
+      { role: "assistant", content: soFar },
+      { role: "user", content: CONTINUE_PROMPT }
+    ]);
+  }
+}
 // =======================
 // AUTH LOGIC
 // =======================
@@ -687,11 +725,10 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
   streamDiv.textContent = '';
   chatWindow.appendChild(streamDiv);
   scrollToBottomIfNear(chatWindow);
-  const contextMessages = messages.concat(
-    [{ role: "user", content: suggestionText }]
-  );
+  // messages already contains the new user message (addMessage reloads it)
+  const contextMessages = messages.map(m => ({ role: m.role, content: m.content }));
   const selectedModel = modelDropdown.value;
-  await streamChat(contextMessages, selectedModel, {
+  await streamChatWithContinue(contextMessages, selectedModel, {
     onChunk: (partial) => {
       if (window.markdownit) {
         streamDiv.innerHTML = window.markdownit().render(partial);
@@ -747,9 +784,10 @@ chatForm.onsubmit = async (e) => {
   streamDiv.textContent = '';
   chatWindow.appendChild(streamDiv);
   scrollToBottomIfNear(chatWindow);
-  const contextMessages = messages.concat([{ role: "user", content: text }]);
+  // messages already contains the new user message (addMessage reloads it)
+  const contextMessages = messages.map(m => ({ role: m.role, content: m.content }));
   const selectedModel = modelDropdown.value;
-  await streamChat(contextMessages, selectedModel, {
+  await streamChatWithContinue(contextMessages, selectedModel, {
     onChunk: (partial) => {
       if (window.markdownit) {
         streamDiv.innerHTML = window.markdownit().render(partial);

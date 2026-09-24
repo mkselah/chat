@@ -72,7 +72,7 @@ async function getSuggestions(messages) {
   return suggestions;
 }
 // ---- Gemini (true token streaming via streamGenerateContent + SSE) ----
-async function* geminiStreamChat(messages, modelName) {
+async function* geminiStreamChat(messages, modelName, info = {}) {
   const systemMsg = messages.find(m => m.role === "system");
   const systemInstruction = systemMsg
     ? { parts: [{ text: systemMsg.content }] }
@@ -107,6 +107,7 @@ async function* geminiStreamChat(messages, modelName) {
     try {
       const parsed = JSON.parse(jsonStr);
       const text = parsed.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
+      if (parsed.candidates?.[0]?.finishReason) info.stopReason = parsed.candidates[0].finishReason;
       if (text) yield text;
     } catch (e) {
       // Partial/incomplete JSON chunk — ignore and wait for more data
@@ -114,7 +115,7 @@ async function* geminiStreamChat(messages, modelName) {
   }
 }
 // ---- Claude (true token streaming via Anthropic SSE) ----
-async function* claudeStreamChat(messages, modelId) {
+async function* claudeStreamChat(messages, modelId, info = {}) {
   if (!ANTHROPIC_API_KEY) throw new Error("Missing ANTHROPIC_API_KEY");
   const systemMsg = messages.find(m => m.role === "system");
   const systemPrompt = systemMsg ? systemMsg.content : undefined;
@@ -126,7 +127,7 @@ async function* claudeStreamChat(messages, modelId) {
     }));
   const payload = {
     model: modelId,
-    max_tokens: 4096,
+    max_tokens: 20000,
     messages: claudeMsgs,
     stream: true,
     ...(systemPrompt && { system: systemPrompt })
@@ -149,13 +150,20 @@ async function* claudeStreamChat(messages, modelId) {
     if (!trimmed.startsWith("data:")) continue;
     const jsonStr = trimmed.slice(5).trim();
     if (!jsonStr) continue;
+    let parsed;
     try {
-      const parsed = JSON.parse(jsonStr);
-      if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-        yield parsed.delta.text;
-      }
+      parsed = JSON.parse(jsonStr);
     } catch (e) {
-      // Partial/incomplete JSON chunk — ignore and wait for more data
+      continue; // Partial/incomplete JSON chunk — ignore and wait for more data
+    }
+    if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+      yield parsed.delta.text;
+    }
+    if (parsed.type === "message_delta" && parsed.delta?.stop_reason) {
+      info.stopReason = parsed.delta.stop_reason; // e.g. "end_turn" or "max_tokens"
+    }
+    if (parsed.type === "error") {
+      throw new Error("Claude API: " + (parsed.error?.message || "stream error"));
     }
   }
 }
@@ -185,14 +193,16 @@ export default async (req, context) => {
   const stream = new ReadableStream({
     async start(controller) {
       let fullReply = "";
+      const info = {};           // collects stopReason from the model
+      let metaStarted = false;   // true once META_MARKER has been sent
       try {
         if (/^gemini/i.test(useModel)) {
-          for await (const delta of geminiStreamChat(contextMsgs, useModel)) {
+          for await (const delta of geminiStreamChat(contextMsgs, useModel, info)) {
             fullReply += delta;
             controller.enqueue(encoder.encode(delta));
           }
         } else if (/^claude/i.test(useModel)) {
-          for await (const delta of claudeStreamChat(contextMsgs, useModel)) {
+          for await (const delta of claudeStreamChat(contextMsgs, useModel, info)) {
             fullReply += delta;
             controller.enqueue(encoder.encode(delta));
           }
@@ -214,21 +224,30 @@ export default async (req, context) => {
           const completionStream = await openai.chat.completions.create(chatParams);
           for await (const chunk of completionStream) {
             const delta = chunk.choices?.[0]?.delta?.content;
+            if (chunk.choices?.[0]?.finish_reason) info.stopReason = chunk.choices[0].finish_reason;
             if (delta) {
               fullReply += delta;
               controller.enqueue(encoder.encode(delta));
             }
           }
         }
-        // After the reply is fully sent, append suggestions as hidden metadata
-        const allMessages = [...messages, { role: "assistant", content: fullReply }];
-        const suggestions = await getSuggestions(allMessages);
-        const meta = JSON.stringify({ suggestions });
-        controller.enqueue(encoder.encode(META_MARKER + meta));
+        // Tell the browser the reply is complete (one JSON object per line)
+        controller.enqueue(encoder.encode(
+          META_MARKER + JSON.stringify({ replyDone: true, stopReason: info.stopReason || "" }) + "\n"
+        ));
+        metaStarted = true;
+        // Then append suggestions as a second metadata line
+        try {
+          const allMessages = [...messages, { role: "assistant", content: fullReply }];
+          const suggestions = await getSuggestions(allMessages);
+          controller.enqueue(encoder.encode(JSON.stringify({ suggestions }) + "\n"));
+        } catch (e) {
+          console.error("suggestions ERROR:", e.message);
+        }
       } catch (err) {
         console.error("chat-stream ERROR:", err.stack || err);
-        const meta = JSON.stringify({ error: err.message || "Unknown error" });
-        controller.enqueue(encoder.encode(META_MARKER + meta));
+        const meta = JSON.stringify({ error: err.message || "Unknown error" }) + "\n";
+        controller.enqueue(encoder.encode((metaStarted ? "" : META_MARKER) + meta));
       } finally {
         controller.close();
       }
