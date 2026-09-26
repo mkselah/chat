@@ -65,8 +65,8 @@ async function geminiChat(messages, modelName) {
     ...(systemInstruction && { systemInstruction })
   };
   if (!GEMINI_API_KEY) throw new Error("Missing Gemini_API_Key");
-  // Use whichever Gemini model was selected in the dropdown; default to gemini-3.8-flash
-  const useModelName = modelName || "gemini-3.8-flash";
+  // Use whichever Gemini model was selected in the dropdown; default to:
+  const useModelName = modelName || "claude-sonnet-5";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModelName}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
   const resp = await fetch(url, {
     method: "POST",
