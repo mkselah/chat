@@ -4,7 +4,8 @@ const topicDropdown = document.getElementById("topicDropdown");
 const addTopicBtn = document.getElementById("addTopicBtn");
 const renameTopicBtn = document.getElementById("renameTopicBtn");
 const deleteTopicBtn = document.getElementById("deleteTopicBtn");
-const logoutBtn = document.getElementById("logoutBtn"); // Only one logoutBtn now!
+const instructionsBtn = document.getElementById("instructionsBtn");
+const logoutBtn = document.getElementById("logoutBtn");
 
 const chatWindow = document.getElementById("chatWindow");
 const chatForm = document.getElementById("chatForm");
@@ -373,6 +374,10 @@ function renderTopicsDropdown() {
   topicDropdown.value = activeTopicIdx;
   // Hide rename/delete if no topics
   renameTopicBtn.disabled = deleteTopicBtn.disabled = topics.length === 0;
+  instructionsBtn.disabled = topics.length === 0;
+  const sp = topics[activeTopicIdx]?.system_prompt || "";
+  instructionsBtn.title = sp ? "Topic instructions: " + sp : "Topic instructions (none set)";
+  instructionsBtn.style.background = sp ? "#c9f2d0" : "";
   if(topics[activeTopicIdx]) {
     document.getElementById('currentTopicLabel').textContent = "  (" + topics[activeTopicIdx].name + ")";
   } else {
@@ -408,6 +413,35 @@ deleteTopicBtn.onclick = async () => {
   if (!topics[activeTopicIdx]) return;
   if (confirm("Delete this topic?")) await deleteTopic(activeTopicIdx);
 };
+// ====== PER-TOPIC INSTRUCTIONS (system_prompt) ======
+instructionsBtn.onclick = async () => {
+  const t = topics[activeTopicIdx];
+  if (!t) return;
+  const current = t.system_prompt || "";
+  const text = prompt(
+    "Instructions for this topic (e.g. \"Answer in Danish, explain for a 10-year-old\").\nLeave empty to remove:",
+    current
+  );
+  if (text === null) return; // user pressed Cancel
+  const newPrompt = text.trim();
+  const { error } = await supabase
+    .from('topics')
+    .update({ system_prompt: newPrompt })
+    .eq('id', t.id);
+  if (error) return alert(error.message);
+  t.system_prompt = newPrompt;
+  renderTopicsDropdown();
+};
+// Builds the messages sent to the LLM: topic instructions (if any) + chat history
+function buildContextMessages() {
+  const t = topics[activeTopicIdx];
+  const history = messages.map(m => ({ role: m.role, content: m.content }));
+  if (t && t.system_prompt && t.system_prompt.trim()) {
+    return [{ role: "system", content: t.system_prompt.trim() }, ...history];
+  }
+  return history;
+}
+// ====== END PER-TOPIC INSTRUCTIONS ======
 
 // ====== COPY BUTTON FEATURE ======
 // Helper: Copy text to clipboard (fallback for older browsers)
@@ -771,7 +805,7 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
   chatWindow.appendChild(streamDiv);
   scrollToBottomIfNear(chatWindow);
   // messages already contains the new user message (addMessage reloads it)
-  const contextMessages = messages.map(m => ({ role: m.role, content: m.content }));
+  const contextMessages = buildContextMessages();
   const selectedModel = modelDropdown.value;
   await streamChatWithContinue(contextMessages, selectedModel, {
     onChunk: (partial) => {
@@ -839,7 +873,7 @@ chatForm.onsubmit = async (e) => {
   chatWindow.appendChild(streamDiv);
   scrollToBottomIfNear(chatWindow);
   // messages already contains the new user message (addMessage reloads it)
-  const contextMessages = messages.map(m => ({ role: m.role, content: m.content }));
+  const contextMessages = buildContextMessages();
   const selectedModel = modelDropdown.value;
   await streamChatWithContinue(contextMessages, selectedModel, {
     onChunk: (partial) => {

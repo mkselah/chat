@@ -83,12 +83,12 @@ async function getSuggestions(messages) {
 async function* geminiStreamChat(messages, modelName, info) {
   const key = env("Gemini_API_Key");
   if (!key) throw new Error("Missing Gemini_API_Key");
-  const systemMsg = messages.find(m => m.role === "system");
+  const systemText = messages.filter(m => m.role === "system").map(m => m.content).join("\n\n");
   const payload = {
     contents: messages
       .filter(m => m.role !== "system")
       .map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-    ...(systemMsg && { systemInstruction: { parts: [{ text: systemMsg.content }] } })
+    ...(systemText && { systemInstruction: { parts: [{ text: systemText }] } })
   };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`;
   const resp = await fetch(url, {
