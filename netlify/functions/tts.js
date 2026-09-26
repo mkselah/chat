@@ -27,7 +27,7 @@ export async function handler(event, context) {
     const response = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
       voice,
-      input: text,
+      input: part,
       response_format: "mp3",
       speed: 1
     });

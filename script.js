@@ -275,6 +275,9 @@ async function loadData() {
   topics = topicRows || [];
   if (!topics.length) activeTopicIdx = 0;
   else if (activeTopicIdx >= topics.length) activeTopicIdx = 0;
+  if (topics[activeTopicIdx]) {
+    document.getElementById("modelDropdown").value = topics[activeTopicIdx].model || "claude-sonnet-5";
+  }
   await loadMessages();
   renderAll();
 }
@@ -291,7 +294,7 @@ async function loadMessages() {
 
 async function saveTopic(name) {
   if (!user) return;
-  let currentModel = document.getElementById("modelDropdown").value || "gemini-3.8-flash";
+  let currentModel = document.getElementById("modelDropdown").value || "claude-sonnet-5";
   let { data, error } = await supabase
     .from('topics')
     .insert({ name, user_id: user.id, model: currentModel })
@@ -306,7 +309,7 @@ async function saveTopic(name) {
 async function renameTopic(idx, name) {
   if (!user || !topics[idx]) return;
   let id = topics[idx].id;
-  let newModel = document.getElementById("modelDropdown").value || "gemini-3.8-flash";
+  let newModel = document.getElementById("modelDropdown").value || "claude-sonnet-5";
   let { error } = await supabase
     .from('topics')
     .update({ name, model: newModel })
@@ -384,7 +387,14 @@ topicDropdown.onchange = async function () {
   await loadMessages();
   renderAll();
 };
-
+// Save the model to the current topic whenever the dropdown changes
+document.getElementById("modelDropdown").onchange = async function () {
+  const t = topics[activeTopicIdx];
+  if (!t) return;
+  t.model = this.value;
+  const { error } = await supabase.from('topics').update({ model: this.value }).eq('id', t.id);
+  if (error) alert(error.message);
+};
 addTopicBtn.onclick = async () => {
   const name = prompt("Topic name?");
   if (name) await saveTopic(name);
@@ -781,7 +791,10 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
     },
     onError: (errMsg) => {
       streamDiv.remove();
-      chatWindow.innerHTML += "<div class='system'>Error: " + errMsg + "</div>";
+      const errDiv = document.createElement('div');
+      errDiv.className = 'system';
+      errDiv.textContent = "Error: " + errMsg;
+      chatWindow.appendChild(errDiv);
     }
   });
 }
@@ -805,11 +818,17 @@ userInput.addEventListener("input", function() {
 });
 
 // ===== Chat Submit =====
+let isSending = false;
 chatForm.onsubmit = async (e) => {
   e.preventDefault();
   const text = userInput.value.trim();
   if (!text) return;
   if (!topics[activeTopicIdx]) return;
+  if (isSending) return;
+  isSending = true;
+  const sendBtn = chatForm.querySelector('button[type="submit"]');
+  sendBtn.disabled = true;
+  sendBtn.textContent = "…";
   await addMessage("user", text);
   userInput.value = '';
   autoGrow(userInput);
@@ -840,9 +859,15 @@ chatForm.onsubmit = async (e) => {
     },
     onError: (errMsg) => {
       streamDiv.remove();
-      chatWindow.innerHTML += "<div class='system'>Error: " + errMsg + "</div>";
+      const errDiv = document.createElement('div');
+      errDiv.className = 'system';
+      errDiv.textContent = "Error: " + errMsg;
+      chatWindow.appendChild(errDiv);
     }
   });
+  isSending = false;
+  sendBtn.disabled = false;
+  sendBtn.textContent = "Send";
 };
 
 const showSheetBtn = document.getElementById("showSheetBtn");
