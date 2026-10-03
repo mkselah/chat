@@ -466,16 +466,71 @@ function copyToClipboard(text) {
 // Opens Google Calendar with a pre-filled event (no API key needed).
 // You check the details in Google Calendar and click "Save".
 const GCAL_MAX_DETAILS = 1500; // keep the URL short enough for Google
+
+function stripInlineMarkdown(s) {
+  return s
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")              // images -> alt text
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")         // [text](url) -> text (url)
+    .replace(/`([^`]+)`/g, "$1")                            // `code`
+    .replace(/\*\*(.+?)\*\*/g, "$1")                        // **bold**
+    .replace(/__(.+?)__/g, "$1")                            // __bold__
+    .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1$2") // *italic*
+    .replace(/(^|[^_\w])_(?!\s)([^_\n]+?)_(?!\w)/g, "$1$2")   // _italic_
+    .replace(/~~(.+?)~~/g, "$1")                            // ~~strike~~
+    .replace(/\*\*/g, "");                                  // any leftover **
+}
+function markdownToPlainText(md) {
+  const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  // Heading helper: blank line before it (if needed), heading in CAPITALS
+  const pushHeading = (h) => {
+    if (out.length && out[out.length - 1].trim() !== "") out.push("");
+    out.push(h);
+  };
+  for (let line of lines) {
+    // Skip code fences ```
+    if (/^\s*```/.test(line)) continue;
+    // Horizontal rule --- / *** / ___
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { out.push("──────────"); continue; }
+    // Table separator row |---|---|
+    if (line.includes("|") && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(line)) continue;
+    // # Heading
+    let m = line.match(/^\s*#{1,6}\s+(.*)$/);
+    if (m) { pushHeading(stripInlineMarkdown(m[1]).trim().toUpperCase()); continue; }
+    // Whole line bold: **Sat – Persistence Challenge**  or  **After 15 minutes, ask:**
+    m = line.match(/^\s*\*\*([^*]+)\*\*\s*(:?)\s*$/);
+    if (m) { pushHeading((m[1].trim() + m[2]).toUpperCase()); continue; }
+    // Bold label at start: **Goal:** text   or   **Goal**: text
+    m = line.match(/^(\s*)\*\*([^*]+?)\*\*\s*(:?)\s*(.+)$/);
+    if (m && (m[2].trim().endsWith(":") || m[3] === ":")) {
+      if (out.length && out[out.length - 1].trim() !== "" && !m[1]) out.push("");
+      out.push(m[1] + (m[2].trim() + m[3]).toUpperCase() + " " + stripInlineMarkdown(m[4]));
+      continue;
+    }
+    // > quote
+    line = line.replace(/^(\s*)>\s?/, "$1");
+    // Bullets - * +  ->  •
+    line = line.replace(/^(\s*)[-*+]\s+/, "$1• ");
+    // Table row | a | b |  ->  a  –  b
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      line = line.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim()).join("  –  ");
+    }
+    out.push(stripInlineMarkdown(line));
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function addToGoogleCalendar(text) {
   const title = topics[activeTopicIdx] ? topics[activeTopicIdx].name : "Chat note";
   // All-day event today (date/time can be changed in Google Calendar before saving)
   const d = new Date();
   const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
   const fmt = x => x.getFullYear() + String(x.getMonth() + 1).padStart(2, "0") + String(x.getDate()).padStart(2, "0");
-  let details = text;
+  const plain = markdownToPlainText(text);
+  let details = plain;
   if (details.length > GCAL_MAX_DETAILS) {
     details = details.slice(0, GCAL_MAX_DETAILS) + "\n\n…(text shortened – full text is copied to your clipboard, paste it here)";
-    copyToClipboard(text);
+    copyToClipboard(plain);
   }
   const url = "https://calendar.google.com/calendar/render?action=TEMPLATE"
     + "&text=" + encodeURIComponent(title)
