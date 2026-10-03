@@ -1146,7 +1146,7 @@ function drawDashChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      scales: { y: { beginAtZero: false } },
+      scales: { y: { min: 1, max: 5, ticks: { stepSize: 1 } } },
       plugins: { legend: { position: "bottom" } }
     }
   });
