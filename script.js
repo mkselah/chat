@@ -1027,6 +1027,161 @@ async function loadSheet(key, label) {
   }
 }
 
+// ====== FOOTBALL DASHBOARD ======
+const DASH_SHEET_KEY = "FootballSessions"; // must match a key in netlify/functions/sheet.js
+const dashboardBtn = document.getElementById("dashboardBtn");
+const dashboardPanel = document.getElementById("dashboardPanel");
+const dashColumn = document.getElementById("dashColumn");
+const dashStats = document.getElementById("dashStats");
+const dashAskBtn = document.getElementById("dashAskBtn");
+const dashCloseBtn = document.getElementById("dashCloseBtn");
+let dashData = null;   // { headers, rows }
+let dashChart = null;  // Chart.js instance
+let dashXCol = 0;      // index of the date column
+// "7,5" -> 7.5, "80%" -> 80, "" or text -> null
+function dashParseNum(v) {
+  let s = String(v ?? "").trim().replace(/\s/g, "").replace(/%$/, "");
+  if (s === "") return null;
+  s = s.replace(",", ".");
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+// Find the date column by header name, otherwise use the first column
+function dashFindDateColumn(headers) {
+  const idx = headers.findIndex(h => /date|dato|datum|day/i.test(h));
+  return idx >= 0 ? idx : 0;
+}
+// Simple linear trend line (least squares)
+function dashTrend(values) {
+  const n = values.length;
+  if (n < 2) return values.map(() => null);
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  values.forEach((y, x) => { sx += x; sy += y; sxy += x * y; sxx += x * x; });
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
+  const intercept = (sy - slope * sx) / n;
+  return values.map((_, x) => Math.round((intercept + slope * x) * 100) / 100);
+}
+// Collect the points (date label + number) for the selected column
+function dashGetPoints(col) {
+  return dashData.rows
+    .map(r => ({ label: r[dashXCol] || "", y: dashParseNum(r[col]) }))
+    .filter(p => p.y !== null);
+}
+function drawDashChart() {
+  if (!dashData) return;
+  const col = parseInt(dashColumn.value);
+  if (isNaN(col)) return;
+  localStorage.setItem("dashColumnName", dashData.headers[col]);
+  const points = dashGetPoints(col);
+  const labels = points.map(p => p.label);
+  const values = points.map(p => p.y);
+  // Stats line
+  if (values.length) {
+    const first = values[0];
+    const last = values[values.length - 1];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const change = last - first;
+    dashStats.textContent =
+      "Latest: " + last +
+      "  |  Change: " + (change >= 0 ? "+" : "") + Math.round(change * 100) / 100 +
+      "  |  Min: " + min + "  |  Max: " + max +
+      "  |  Avg: " + Math.round(avg * 100) / 100 +
+      "  |  Sessions: " + values.length;
+  } else {
+    dashStats.textContent = "No numbers in this column.";
+  }
+  if (typeof Chart === "undefined") {
+    dashStats.textContent = "Chart library not loaded (check internet / index.html).";
+    return;
+  }
+  if (dashChart) dashChart.destroy();
+  dashChart = new Chart(document.getElementById("dashChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: dashData.headers[col],
+          data: values,
+          borderColor: "#3b6fd8",
+          backgroundColor: "#3b6fd8",
+          tension: 0.25,
+          pointRadius: 4
+        },
+        {
+          label: "Trend",
+          data: dashTrend(values),
+          borderColor: "#e08a2c",
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: false } },
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+}
+// Open dashboard: always fetch fresh data from the sheet
+dashboardBtn.onclick = async () => {
+  dashboardPanel.style.display = "flex";
+  dashStats.textContent = "Loading…";
+  dashColumn.innerHTML = "";
+  try {
+    const resp = await fetch("/.netlify/functions/sheet?sheet=" + encodeURIComponent(DASH_SHEET_KEY));
+    const data = await resp.json();
+    if (!data || data.error) throw new Error((data && data.error) || "Unknown error");
+    if (!data.rows || !data.rows.length) throw new Error("No data in sheet.");
+    dashData = data;
+    dashXCol = dashFindDateColumn(data.headers);
+    // Only offer columns that contain at least 2 numbers
+    const numericCols = data.headers
+      .map((h, i) => i)
+      .filter(i => i !== dashXCol && data.rows.filter(r => dashParseNum(r[i]) !== null).length >= 2);
+    if (!numericCols.length) throw new Error("No numeric columns found.");
+    for (const i of numericCols) {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = data.headers[i];
+      dashColumn.appendChild(opt);
+    }
+    // Remember last chosen column
+    const saved = localStorage.getItem("dashColumnName");
+    const savedIdx = data.headers.indexOf(saved);
+    if (savedIdx >= 0 && numericCols.includes(savedIdx)) dashColumn.value = savedIdx;
+    drawDashChart();
+  } catch (e) {
+    dashStats.textContent = "Error: " + (e.message || e);
+  }
+};
+dashColumn.onchange = drawDashChart;
+dashCloseBtn.onclick = () => { dashboardPanel.style.display = "none"; };
+// Click on dark background closes too
+dashboardPanel.onclick = (e) => {
+  if (e.target === dashboardPanel) dashboardPanel.style.display = "none";
+};
+// Put the selected column into the chat box so the AI can analyse it
+dashAskBtn.onclick = () => {
+  if (!dashData) return;
+  const col = parseInt(dashColumn.value);
+  if (isNaN(col)) return;
+  const points = dashGetPoints(col);
+  let text = "Football skill development for \"" + dashData.headers[col] + "\" (" +
+    dashData.headers[dashXCol] + ": value):\n";
+  for (const p of points) text += p.label + ": " + p.y + "\n";
+  text += "\nAnalyse the development, describe the trend, and suggest what to train next.";
+  userInput.value = text + (userInput.value ? "\n\n" + userInput.value : "");
+  autoGrow(userInput);
+  dashboardPanel.style.display = "none";
+  userInput.focus();
+};
+// ====== END FOOTBALL DASHBOARD ======
 // ==== INIT ===
 window.onload = async () => {
   let { data: { user: u }} = await supabase.auth.getUser();

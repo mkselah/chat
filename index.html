@@ -6,6 +6,7 @@
   <title>Chat by Topic</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <!-- Top Auth Bar: only login/signup on this line -->
@@ -48,10 +49,23 @@
         <textarea id="userInput" autocomplete="off" placeholder="Type your message..." rows="1"></textarea>
         <button type="button" id="micBtn" title="Use voice input">🎤</button>
         <button id="showSheetBtn" type="button" title="Show Google Sheet Data">📄</button>
+        <button id="dashboardBtn" type="button" title="Football skill dashboard">📈</button>
         <button type="submit">Send</button>
         <div id="sheetData" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:6px; align-items:center; max-height:300px; overflow:auto; background:#f8faff; border:1px solid #bed8ff; margin:8px 0; padding:7px; border-radius:7px;"></div>
       </form>
     </main>
+  </div>
+  <!-- Football Dashboard popup -->
+  <div id="dashboardPanel" style="display:none;">
+    <div id="dashboardBox">
+      <div id="dashboardHeader">
+        <select id="dashColumn" title="Choose skill column"></select>
+        <button id="dashAskBtn" type="button" title="Ask AI about this column">💬</button>
+        <button id="dashCloseBtn" type="button" title="Close">✖</button>
+      </div>
+      <div id="dashStats"></div>
+      <div id="dashChartWrap"><canvas id="dashChart"></canvas></div>
+    </div>
   </div>
   <script type="module" src="script.js"></script>
 </body>

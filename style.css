@@ -336,3 +336,79 @@ body {
 .calendar-btn:active {
   background: #bed8ff;
 }
+/* ===== Football Dashboard ===== */
+#chatForm #dashboardBtn {
+  background: none;
+  border: none;
+  font-size: 1.13em;
+  padding: 0.1em 0.7em;
+  border-radius: 6px;
+  opacity: 0.7;
+  cursor: pointer;
+  box-shadow: none;
+}
+#chatForm #dashboardBtn:hover {
+  background: #e0e4fc;
+  opacity: 1;
+}
+#dashboardPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+}
+#dashboardBox {
+  background: white;
+  border-radius: 10px;
+  width: min(900px, 96vw);
+  height: min(560px, 88vh);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+#dashboardHeader {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+#dashColumn {
+  flex: 1;
+  min-width: 0;
+  font-size: 1em;
+  padding: 0.35em;
+  border-radius: 6px;
+}
+#dashboardHeader button {
+  font-size: 1.05em;
+  padding: 0.3em 0.8em;
+  border: none;
+  border-radius: 6px;
+  background: #e5eaff;
+  cursor: pointer;
+}
+#dashboardHeader button:active {
+  background: #bed8ff;
+}
+#dashStats {
+  font-size: 0.88em;
+  color: #444;
+  line-height: 1.4;
+}
+#dashChartWrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+@media (max-width: 600px) {
+  #dashboardBox {
+    width: 100vw;
+    height: 92vh;
+    border-radius: 10px 10px 0 0;
+    align-self: flex-end;
+  }
+}
