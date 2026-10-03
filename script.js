@@ -1032,6 +1032,9 @@ const DASH_SHEET_KEY = "FootballSessions"; // must match a key in netlify/functi
 const dashboardBtn = document.getElementById("dashboardBtn");
 const dashboardPanel = document.getElementById("dashboardPanel");
 const dashColumn = document.getElementById("dashColumn");
+const dashColumn2 = document.getElementById("dashColumn2");
+const dashColumn3 = document.getElementById("dashColumn3");
+const DASH_COLORS = ["#3b6fd8", "#d83b6f", "#2ca05a"]; // blue, red, green
 const dashStats = document.getElementById("dashStats");
 const dashAskBtn = document.getElementById("dashAskBtn");
 const dashCloseBtn = document.getElementById("dashCloseBtn");
@@ -1067,59 +1070,79 @@ function dashGetPoints(col) {
     .map(r => ({ label: r[dashXCol] || "", y: dashParseNum(r[col]) }))
     .filter(p => p.y !== null);
 }
+// Returns the selected column indexes (1 to 3, no duplicates)
+function dashSelectedCols() {
+  const cols = [];
+  for (const sel of [dashColumn, dashColumn2, dashColumn3]) {
+    const c = parseInt(sel.value);
+    if (!isNaN(c) && !cols.includes(c)) cols.push(c);
+  }
+  return cols;
+}
+// Stats text for one column
+function dashStatsText(values) {
+  if (!values.length) return "No numbers in this column.";
+  const first = values[0];
+  const last = values[values.length - 1];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  const change = last - first;
+  return "Latest: " + last +
+    "  |  Change: " + (change >= 0 ? "+" : "") + Math.round(change * 100) / 100 +
+    "  |  Min: " + min + "  |  Max: " + max +
+    "  |  Avg: " + Math.round(avg * 100) / 100 +
+    "  |  Sessions: " + values.length;
+}
 function drawDashChart() {
   if (!dashData) return;
-  const col = parseInt(dashColumn.value);
-  if (isNaN(col)) return;
-  localStorage.setItem("dashColumnName", dashData.headers[col]);
-  const points = dashGetPoints(col);
-  const labels = points.map(p => p.label);
-  const values = points.map(p => p.y);
-  // Stats line
-  if (values.length) {
-    const first = values[0];
-    const last = values[values.length - 1];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const change = last - first;
-    dashStats.textContent =
-      "Latest: " + last +
-      "  |  Change: " + (change >= 0 ? "+" : "") + Math.round(change * 100) / 100 +
-      "  |  Min: " + min + "  |  Max: " + max +
-      "  |  Avg: " + Math.round(avg * 100) / 100 +
-      "  |  Sessions: " + values.length;
+  const cols = dashSelectedCols();
+  if (!cols.length) return;
+  // Remember the choices in all 3 dropdowns
+  [dashColumn, dashColumn2, dashColumn3].forEach((sel, n) => {
+    const c = parseInt(sel.value);
+    localStorage.setItem("dashColumnName" + (n ? n + 1 : ""), isNaN(c) ? "" : dashData.headers[c]);
+  });
+  // Rows where at least one selected column has a number
+  const rows = dashData.rows.filter(r => cols.some(c => dashParseNum(r[c]) !== null));
+  const labels = rows.map(r => r[dashXCol] || "");
+  // Stats: one line per selected skill
+  if (cols.length === 1) {
+    dashStats.textContent = dashStatsText(dashGetPoints(cols[0]).map(p => p.y));
   } else {
-    dashStats.textContent = "No numbers in this column.";
+    dashStats.textContent = cols
+      .map(c => dashData.headers[c] + ": " + dashStatsText(dashGetPoints(c).map(p => p.y)))
+      .join("\n");
   }
   if (typeof Chart === "undefined") {
     dashStats.textContent = "Chart library not loaded (check internet / index.html).";
     return;
   }
+  // One line per selected skill (null = no value that day)
+  const datasets = cols.map((c, n) => ({
+    label: dashData.headers[c],
+    data: rows.map(r => dashParseNum(r[c])),
+    borderColor: DASH_COLORS[n],
+    backgroundColor: DASH_COLORS[n],
+    tension: 0.25,
+    pointRadius: 4,
+    spanGaps: true
+  }));
+  // Trend line only when exactly 1 skill is selected
+  if (cols.length === 1) {
+    datasets.push({
+      label: "Trend",
+      data: dashTrend(datasets[0].data),
+      borderColor: "#e08a2c",
+      borderDash: [6, 4],
+      pointRadius: 0,
+      fill: false
+    });
+  }
   if (dashChart) dashChart.destroy();
   dashChart = new Chart(document.getElementById("dashChart"), {
     type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: dashData.headers[col],
-          data: values,
-          borderColor: "#3b6fd8",
-          backgroundColor: "#3b6fd8",
-          tension: 0.25,
-          pointRadius: 4
-        },
-        {
-          label: "Trend",
-          data: dashTrend(values),
-          borderColor: "#e08a2c",
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false
-        }
-      ]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1145,22 +1168,38 @@ dashboardBtn.onclick = async () => {
       .map((h, i) => i)
       .filter(i => i !== dashXCol && data.rows.filter(r => dashParseNum(r[i]) !== null).length >= 2);
     if (!numericCols.length) throw new Error("No numeric columns found.");
-    for (const i of numericCols) {
-      const opt = document.createElement("option");
-      opt.value = i;
-      opt.textContent = data.headers[i];
-      dashColumn.appendChild(opt);
+    // Dropdowns 2 and 3 start with a "none" option
+    for (const sel of [dashColumn2, dashColumn3]) {
+      sel.innerHTML = "";
+      const none = document.createElement("option");
+      none.value = "";
+      none.textContent = "(compare: none)";
+      sel.appendChild(none);
     }
-    // Remember last chosen column
-    const saved = localStorage.getItem("dashColumnName");
-    const savedIdx = data.headers.indexOf(saved);
-    if (savedIdx >= 0 && numericCols.includes(savedIdx)) dashColumn.value = savedIdx;
+    for (const i of numericCols) {
+      for (const sel of [dashColumn, dashColumn2, dashColumn3]) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = data.headers[i];
+        sel.appendChild(opt);
+      }
+    }
+    // Remember last chosen columns
+    const restore = (sel, storageKey) => {
+      const savedIdx = data.headers.indexOf(localStorage.getItem(storageKey));
+      if (savedIdx >= 0 && numericCols.includes(savedIdx)) sel.value = savedIdx;
+    };
+    restore(dashColumn, "dashColumnName");
+    restore(dashColumn2, "dashColumnName2");
+    restore(dashColumn3, "dashColumnName3");
     drawDashChart();
   } catch (e) {
     dashStats.textContent = "Error: " + (e.message || e);
   }
 };
 dashColumn.onchange = drawDashChart;
+dashColumn2.onchange = drawDashChart;
+dashColumn3.onchange = drawDashChart;
 dashCloseBtn.onclick = () => { dashboardPanel.style.display = "none"; };
 // Click on dark background closes too
 dashboardPanel.onclick = (e) => {
@@ -1169,13 +1208,18 @@ dashboardPanel.onclick = (e) => {
 // Put the selected column into the chat box so the AI can analyse it
 dashAskBtn.onclick = () => {
   if (!dashData) return;
-  const col = parseInt(dashColumn.value);
-  if (isNaN(col)) return;
-  const points = dashGetPoints(col);
-  let text = "Football skill development for \"" + dashData.headers[col] + "\" (" +
+  const cols = dashSelectedCols();
+  if (!cols.length) return;
+  const names = cols.map(c => "\"" + dashData.headers[c] + "\"").join(", ");
+  let text = "Football skill development for " + names + " (" +
     dashData.headers[dashXCol] + ": value):\n";
-  for (const p of points) text += p.label + ": " + p.y + "\n";
-  text += "\nAnalyse the development, describe the trend, and suggest what to train next.";
+  for (const c of cols) {
+    if (cols.length > 1) text += "\n" + dashData.headers[c] + ":\n";
+    for (const p of dashGetPoints(c)) text += p.label + ": " + p.y + "\n";
+  }
+  text += cols.length > 1
+    ? "\nAnalyse and compare the development of these skills, describe the trends, and suggest what to train next."
+    : "\nAnalyse the development, describe the trend, and suggest what to train next.";
   userInput.value = text + (userInput.value ? "\n\n" + userInput.value : "");
   autoGrow(userInput);
   dashboardPanel.style.display = "none";

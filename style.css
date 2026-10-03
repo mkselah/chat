@@ -373,12 +373,13 @@ body {
 }
 #dashboardHeader {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
 }
-#dashColumn {
+#dashColumn, #dashColumn2, #dashColumn3 {
   flex: 1;
-  min-width: 0;
+  min-width: 90px;
   font-size: 1em;
   padding: 0.35em;
   border-radius: 6px;
@@ -398,6 +399,7 @@ body {
   font-size: 0.88em;
   color: #444;
   line-height: 1.4;
+  white-space: pre-line;
 }
 #dashChartWrap {
   flex: 1;
