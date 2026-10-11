@@ -533,3 +533,60 @@ body {
     padding-top: 0.4em;
   }
 }
+/* ===== Collapsible bottom bar (⋯ tools) ===== */
+#chatForm #toolsBtn {
+  display: none; /* hidden on desktop */
+}
+#formTools {
+  display: contents; /* desktop: buttons behave as before */
+}
+@media (max-width: 600px) {
+  #chatForm {
+    align-items: flex-end; /* small buttons stay at the bottom when the text box grows */
+  }
+  #userInput {
+    min-width: 0; /* overrides the old 80vw, so ⋯ and ➤ fit on the same line */
+  }
+  /* ⋯ button: small and light */
+  #chatForm #toolsBtn {
+    display: inline-block;
+    background: none;
+    box-shadow: none;
+    font-size: 1.3em;
+    padding: 0.2em 0.45em;
+    color: #445;
+  }
+  #chatForm #toolsBtn.open {
+    background: #e0e4fc;
+  }
+  /* Tools row: hidden until ⋯ is pressed, shown ABOVE the text box */
+  #formTools {
+    display: none;
+  }
+  #formTools.open {
+    display: flex;
+    gap: 10px;
+    order: -1;
+    flex-basis: 100%;
+    padding-bottom: 4px;
+  }
+  /* Send button becomes a small ➤ icon */
+  #chatForm #sendBtn {
+    font-size: 0; /* hides the text "Send" */
+    padding: 0.45em 0.75em;
+  }
+  #chatForm #sendBtn::after {
+    content: "➤";
+    font-size: 18px;
+  }
+  #chatForm #sendBtn:disabled::after {
+    content: "…"; /* while sending */
+  }
+  /* While editing (✖ is visible) the icon changes to ↻ = resend */
+  #chatForm #cancelEditBtn:not([style*="none"]) ~ #sendBtn::after {
+    content: "↻";
+  }
+  #chatForm #cancelEditBtn {
+    padding: 0.45em 0.7em;
+  }
+}

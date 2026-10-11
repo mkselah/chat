@@ -471,6 +471,22 @@ menuBtn.onclick = () => topbarMenu.classList.toggle("open");
 topbarMenu.addEventListener("click", (e) => {
   if (e.target.tagName === "BUTTON") topbarMenu.classList.remove("open");
 });
+// ====== ⋯ TOOLS MENU in bottom bar (small screens) ======
+const toolsBtn = document.getElementById("toolsBtn");
+const formTools = document.getElementById("formTools");
+function closeTools() {
+  formTools.classList.remove("open");
+  toolsBtn.classList.remove("open");
+}
+toolsBtn.onclick = () => {
+  formTools.classList.toggle("open");
+  toolsBtn.classList.toggle("open");
+};
+// Close after 📄 or 📈 (🎤 keeps it open, so you can see and press ⏹️)
+document.getElementById("showSheetBtn").addEventListener("click", closeTools);
+document.getElementById("dashboardBtn").addEventListener("click", closeTools);
+// Close when a message is sent
+chatForm.addEventListener("submit", closeTools);
 // ====== END SORT + PIN + MENU ======
 // ====== PER-TOPIC INSTRUCTIONS (system_prompt) ======
 // Multi-line popup instead of prompt()
