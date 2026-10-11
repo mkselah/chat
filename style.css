@@ -660,3 +660,18 @@ body {
     max-height: 40vh;  /* grows with text, max 40% of the screen */
   }
 }
+/* ===== ⋯ only visible while typing (mobile) ===== */
+@media (max-width: 600px) {
+  /* Hidden while reading */
+  #chatForm #toolsBtn {
+    display: none;
+  }
+  /* Visible when the text box is tapped (class added by script.js) */
+  #chatForm.typing #toolsBtn {
+    display: inline-block;
+  }
+  /* More space between ⋯ and ➤ */
+  #sendCol {
+    gap: 14px;
+  }
+}

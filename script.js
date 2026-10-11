@@ -487,9 +487,25 @@ document.getElementById("showSheetBtn").addEventListener("click", closeTools);
 document.getElementById("dashboardBtn").addEventListener("click", closeTools);
 // Close when a message is sent
 chatForm.addEventListener("submit", closeTools);
-// Pressing ⋯ or ➤ does not take focus from the text box (no jumping while tapping)
-document.getElementById("sendBtn").addEventListener("mousedown", (e) => e.preventDefault());
-toolsBtn.addEventListener("mousedown", (e) => e.preventDefault());
+// ====== Show ⋯ only while typing (mobile) ======
+// Tapping the text box shows ⋯ (CSS uses the class "typing")
+userInput.addEventListener("focus", () => chatForm.classList.add("typing"));
+// Leaving the text box hides ⋯ again, unless the tools row is open
+// or a button inside the bottom bar was tapped
+userInput.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (formTools.classList.contains("open")) return;
+    if (chatForm.contains(document.activeElement)) return;
+    chatForm.classList.remove("typing");
+  }, 150);
+});
+// Tapping in the chat area (reading) hides ⋯ and closes the tools row
+chatWindow.addEventListener("click", () => {
+  if (document.activeElement === userInput) return;
+  closeTools();
+  chatForm.classList.remove("typing");
+});
+// ====== END Show ⋯ only while typing ======
 // Mobile: after sending, close the keyboard so the text box shrinks to 1 line and the answer is easy to read
 chatForm.addEventListener("submit", () => {
   if (window.matchMedia("(max-width: 600px)").matches) userInput.blur();
