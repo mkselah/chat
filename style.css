@@ -414,3 +414,74 @@ body {
     align-self: flex-end;
   }
 }
+/* ===== Topic Instructions popup ===== */
+#instructionsPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+}
+#instructionsBox {
+  background: white;
+  border-radius: 10px;
+  width: min(600px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+#instructionsTitle {
+  font-weight: bold;
+}
+#instructionsHint {
+  font-size: 0.85em;
+  color: #666;
+}
+#instructionsText {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 180px;
+  flex: 1;
+  font-size: 16px; /* 16px prevents iPhone auto-zoom */
+  font-family: inherit;
+  line-height: 1.4;
+  padding: 0.6em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+#instructionsButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+#instructionsButtons button {
+  font-size: 1em;
+  padding: 0.45em 1.3em;
+  border: none;
+  border-radius: 6px;
+  background: #e5eaff;
+  cursor: pointer;
+}
+#instructionsButtons #instructionsSaveBtn {
+  background: #8db8ff;
+}
+#instructionsButtons button:active {
+  background: #6799db;
+  color: white;
+}
+@media (max-width: 600px) {
+  #instructionsPanel {
+    align-items: flex-end;
+  }
+  #instructionsBox {
+    width: 100vw;
+    border-radius: 10px 10px 0 0;
+  }
+}

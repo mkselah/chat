@@ -69,6 +69,17 @@
       <div id="dashChartWrap"><canvas id="dashChart"></canvas></div>
     </div>
   </div>
+  <div id="instructionsPanel" style="display:none;">
+    <div id="instructionsBox">
+      <div id="instructionsTitle">Instructions for this topic</div>
+      <div id="instructionsHint">e.g. "Answer in Danish, explain for a 10-year-old". Leave empty to remove.</div>
+      <textarea id="instructionsText" rows="10" placeholder="Write instructions here (multiple lines allowed)..."></textarea>
+      <div id="instructionsButtons">
+        <button id="instructionsCancelBtn" type="button">Cancel</button>
+        <button id="instructionsSaveBtn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="script.js"></script>
 </body>
 </html>

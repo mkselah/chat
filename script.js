@@ -414,23 +414,47 @@ deleteTopicBtn.onclick = async () => {
   if (confirm("Delete this topic?")) await deleteTopic(activeTopicIdx);
 };
 // ====== PER-TOPIC INSTRUCTIONS (system_prompt) ======
-instructionsBtn.onclick = async () => {
+// Multi-line popup instead of prompt()
+const instructionsPanel = document.getElementById("instructionsPanel");
+const instructionsText = document.getElementById("instructionsText");
+const instructionsSaveBtn = document.getElementById("instructionsSaveBtn");
+const instructionsCancelBtn = document.getElementById("instructionsCancelBtn");
+function closeInstructions() {
+  instructionsPanel.style.display = "none";
+}
+instructionsBtn.onclick = () => {
   const t = topics[activeTopicIdx];
   if (!t) return;
-  const current = t.system_prompt || "";
-  const text = prompt(
-    "Instructions for this topic (e.g. \"Answer in Danish, explain for a 10-year-old\").\nLeave empty to remove:",
-    current
-  );
-  if (text === null) return; // user pressed Cancel
-  const newPrompt = text.trim();
+  instructionsText.value = t.system_prompt || "";
+  document.getElementById("instructionsTitle").textContent = "Instructions for: " + t.name;
+  instructionsPanel.style.display = "flex";
+  instructionsText.focus();
+};
+instructionsCancelBtn.onclick = closeInstructions;
+// Click on dark background closes too
+instructionsPanel.onclick = (e) => {
+  if (e.target === instructionsPanel) closeInstructions();
+};
+// Escape key closes
+instructionsText.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeInstructions();
+});
+instructionsSaveBtn.onclick = async () => {
+  const t = topics[activeTopicIdx];
+  if (!t) return closeInstructions();
+  const newPrompt = instructionsText.value.trim();
+  instructionsSaveBtn.disabled = true;
+  instructionsSaveBtn.textContent = "…";
   const { error } = await supabase
     .from('topics')
     .update({ system_prompt: newPrompt })
     .eq('id', t.id);
+  instructionsSaveBtn.disabled = false;
+  instructionsSaveBtn.textContent = "Save";
   if (error) return alert(error.message);
   t.system_prompt = newPrompt;
   renderTopicsDropdown();
+  closeInstructions();
 };
 // Builds the messages sent to the LLM: topic instructions (if any) + chat history
 function buildContextMessages() {
