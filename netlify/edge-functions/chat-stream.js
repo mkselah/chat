@@ -15,6 +15,24 @@ Do not include any information about the OpenAI API or how it is used.
 const META_MARKER = "\u0000__META__\u0000";
 // Environment variables (same names as in your Netlify settings)
 const env = (name) => Netlify.env.get(name);
+// ---- Check the Supabase login token. Returns the user, or null if not allowed ----
+async function verifyUser(req) {
+  try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.replace(/^Bearer\s+/i, "").trim();
+    if (!token) return null;
+    const resp = await fetch(env("SUPABASE_URL") + "/auth/v1/user", {
+      headers: { apikey: env("SUPABASE_ANON_KEY"), Authorization: "Bearer " + token }
+    });
+    if (!resp.ok) return null;
+    const u = await resp.json();
+    const allowed = (env("ALLOWED_EMAILS") || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (allowed.length && !allowed.includes((u.email || "").toLowerCase())) return null;
+    return u;
+  } catch (e) {
+    return null;
+  }
+}
 // ---- Read an SSE response line by line ----
 async function* sseLines(response) {
   const reader = response.body.getReader();
@@ -176,6 +194,13 @@ async function* openaiStreamChat(messages, modelId, info) {
 }
 // ---- Handler ----
 export default async (req, context) => {
+  const authUser = await verifyUser(req);
+  if (!authUser) {
+    return new Response(JSON.stringify({ error: "Not logged in (or not allowed)" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
   const encoder = new TextEncoder();
   let messages, model;
   try {

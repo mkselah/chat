@@ -123,6 +123,16 @@ function splitTextIntoChunks(text, charLimit = 1000) {
   return chunks;
 }
 // =======================
+// AUTH HEADERS HELPER (sends Supabase login token to our server functions)
+// =======================
+async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession(); // refreshes token if expired
+  return {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + (session ? session.access_token : "")
+  };
+}
+// =======================
 // STREAMING CHAT HELPER
 // =======================
 const META_MARKER = "\u0000__META__\u0000";
@@ -133,7 +143,7 @@ async function streamChat(contextMessages, model, { onChunk, onDone, onError }) 
   try {
     const resp = await fetch("/api/chat-stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders(),
       body: JSON.stringify({ messages: contextMessages, model }),
     });
     if (!resp.ok || !resp.body) {
@@ -735,12 +745,12 @@ function renderChat() {
 async function downloadTTS(text, language) {
   const chunks = splitTextIntoChunks(text, 1000);
   let audioBlobs = [];
-
   try {
+    const headers = await authHeaders();
     audioBlobs = await Promise.all(chunks.map(chunk =>
       fetch("/.netlify/functions/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ text: chunk, language })
       })
       .then(resp => {
@@ -792,12 +802,12 @@ async function playTTSwithStop(text, language, containerEl, listenBtn) {
   removeStopBtn();
   containerEl.appendChild(stopBtn);
   ttsState.stopBtn = stopBtn;
-
   try {
+    const headers = await authHeaders();
     audioBlobs = await Promise.all(chunks.map(chunk =>
       fetch("/.netlify/functions/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ text: chunk, language })
       })
       .then(resp => {
@@ -1017,7 +1027,7 @@ showSheetBtn.onclick = function() {
 async function loadSheet(key, label) {
   sheetDataDiv.innerHTML = "<span>Loading " + label + "…</span>";
   try {
-    const resp = await fetch("/.netlify/functions/sheet?sheet=" + encodeURIComponent(key));
+    const resp = await fetch("/.netlify/functions/sheet?sheet=" + encodeURIComponent(key), { headers: await authHeaders() });
     const data = await resp.json();
     if (!data || data.error) {
       alert("Error loading sheet: " + ((data && data.error) || "Unknown"));
@@ -1181,7 +1191,7 @@ dashboardBtn.onclick = async () => {
   dashStats.textContent = "Loading…";
   dashColumn.innerHTML = "";
   try {
-    const resp = await fetch("/.netlify/functions/sheet?sheet=" + encodeURIComponent(DASH_SHEET_KEY));
+    const resp = await fetch("/.netlify/functions/sheet?sheet=" + encodeURIComponent(DASH_SHEET_KEY), { headers: await authHeaders() });
     const data = await resp.json();
     if (!data || data.error) throw new Error((data && data.error) || "Unknown error");
     if (!data.rows || !data.rows.length) throw new Error("No data in sheet.");
