@@ -485,3 +485,51 @@ body {
     border-radius: 10px 10px 0 0;
   }
 }
+/* ===== Edit message button ===== */
+.edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1em;
+  opacity: 0.62;
+  padding: 0.15em 0.45em;
+  border-radius: 6px;
+  transition: opacity 0.17s, background 0.18s;
+}
+.edit-btn:hover {
+  opacity: 1;
+  background: #e7eefa;
+}
+.edit-btn:active {
+  background: #bed8ff;
+}
+/* ===== ☰ Topbar menu ===== */
+#menuBtn {
+  display: none; /* hidden on desktop */
+}
+#topbarMenu {
+  display: contents; /* desktop: children behave as if directly in #topbar */
+}
+@media (max-width: 600px) {
+  #menuBtn {
+    display: inline-block;
+  }
+  #topicDropdown {
+    flex: 1;
+    min-width: 0;
+  }
+  #currentTopicLabel {
+    display: none; /* the dropdown already shows the topic name */
+  }
+  #topbarMenu {
+    display: none; /* mobile: hidden until ☰ is pressed */
+  }
+  #topbarMenu.open {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+    flex-basis: 100%;
+    padding-top: 0.4em;
+  }
+}

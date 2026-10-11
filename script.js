@@ -6,6 +6,9 @@ const renameTopicBtn = document.getElementById("renameTopicBtn");
 const deleteTopicBtn = document.getElementById("deleteTopicBtn");
 const instructionsBtn = document.getElementById("instructionsBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const pinTopicBtn = document.getElementById("pinTopicBtn");
+const menuBtn = document.getElementById("menuBtn");
+const topbarMenu = document.getElementById("topbarMenu");
 
 const chatWindow = document.getElementById("chatWindow");
 const chatForm = document.getElementById("chatForm");
@@ -27,6 +30,8 @@ let user = null;
 
 // New: To hold suggestions for last assistant message (index = message #)
 let lastSuggestions = {}; // { messageId: [suggestion1, suggestion2, suggestion3] }
+// Markdown parser created ONCE (faster than creating a new one for every streamed chunk)
+const md = window.markdownit ? window.markdownit() : null;
 
 // ====== TTS State =======
 let ttsState = {
@@ -284,6 +289,7 @@ async function loadData() {
     .eq('user_id', user.id)
     .order('name', { ascending: true });
   topics = topicRows || [];
+  topics.sort(compareTopics); // pinned first, then most recently used
   if (!topics.length) activeTopicIdx = 0;
   else if (activeTopicIdx >= topics.length) activeTopicIdx = 0;
   if (topics[activeTopicIdx]) {
@@ -313,6 +319,7 @@ async function saveTopic(name) {
   if (error) return alert(error.message);
   topics.push(data[0]);
   activeTopicIdx = topics.length - 1;
+  sortTopics(); // new topic moves to the top (below pinned topics)
   await loadMessages();
   renderAll();
 }
@@ -336,7 +343,7 @@ async function deleteTopic(idx) {
   await supabase.from('messages').delete().eq('topic_id', topicId);
   await supabase.from('topics').delete().eq('id', topicId);
   topics.splice(idx,1);
-  if (activeTopicIdx >= topics.length) activeTopicIdx = topics.length - 1;
+  if (activeTopicIdx >= topics.length) activeTopicIdx = Math.max(0, topics.length - 1);
   await loadMessages();
   renderAll();
 }
@@ -355,8 +362,8 @@ async function deleteMessage(msgId) {
   renderAll();
 }
 
-// Add message
-async function addMessage(role, content) {
+// Add message (suggestions are optional, only for assistant messages)
+async function addMessage(role, content, suggestions = null) {
   if (!user || !topics[activeTopicIdx]) return;
   let { error } = await supabase
     .from('messages')
@@ -364,8 +371,15 @@ async function addMessage(role, content) {
       topic_id: topics[activeTopicIdx].id,
       role,
       content,
+      ...(suggestions && { suggestions }),
     });
   if (error) alert(error.message);
+  // Item 9: remember when this topic was last used
+  if (role === "user") {
+    const t = topics[activeTopicIdx];
+    t.last_used = new Date().toISOString();
+    await supabase.from('topics').update({ last_used: t.last_used }).eq('id', t.id);
+  }
   await loadMessages();
   renderAll();
 }
@@ -378,10 +392,13 @@ function renderTopicsDropdown() {
   topics.forEach((t, idx) => {
     const opt = document.createElement('option');
     opt.value = idx;
-    opt.textContent = t.name;
+    opt.textContent = (t.pinned ? "📌 " : "") + t.name;
     topicDropdown.appendChild(opt);
   });
   topicDropdown.value = activeTopicIdx;
+  // Pin button: disabled without topics, yellow when the topic is pinned
+  pinTopicBtn.disabled = topics.length === 0;
+  pinTopicBtn.style.background = topics[activeTopicIdx]?.pinned ? "#ffe9a8" : "";
   // Hide rename/delete if no topics
   renameTopicBtn.disabled = deleteTopicBtn.disabled = topics.length === 0;
   instructionsBtn.disabled = topics.length === 0;
@@ -396,9 +413,10 @@ function renderTopicsDropdown() {
 }
 topicDropdown.onchange = async function () {
   activeTopicIdx = parseInt(this.value);
-  // Set modelDropdown to this topic's model, default to Gemini 3.8 Flash if missing
-  const topicModel = topics[activeTopicIdx]?.model || "gemini-3.8-flash";
+  // Set modelDropdown to this topic's model, default to claude-sonnet-5 if missing
+  const topicModel = topics[activeTopicIdx]?.model || "claude-sonnet-5";
   modelDropdown.value = topicModel;
+  if (editingMsg) cancelEdit(); // stop editing when switching topic
   await loadMessages();
   renderAll();
 };
@@ -423,6 +441,37 @@ deleteTopicBtn.onclick = async () => {
   if (!topics[activeTopicIdx]) return;
   if (confirm("Delete this topic?")) await deleteTopic(activeTopicIdx);
 };
+// ====== SORT + PIN TOPICS ======
+// Pinned topics first, then most recently used first
+function compareTopics(a, b) {
+  const pin = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+  if (pin !== 0) return pin;
+  return (Date.parse(b.last_used) || 0) - (Date.parse(a.last_used) || 0);
+}
+// Sort topics, but keep the same topic selected
+function sortTopics() {
+  const activeId = topics[activeTopicIdx]?.id;
+  topics.sort(compareTopics);
+  const i = topics.findIndex(t => t.id === activeId);
+  activeTopicIdx = i >= 0 ? i : 0;
+}
+pinTopicBtn.onclick = async () => {
+  const t = topics[activeTopicIdx];
+  if (!t) return;
+  const newPinned = !t.pinned;
+  const { error } = await supabase.from('topics').update({ pinned: newPinned }).eq('id', t.id);
+  if (error) return alert(error.message);
+  t.pinned = newPinned;
+  sortTopics();
+  renderAll();
+};
+// ====== ☰ MENU (small screens) ======
+menuBtn.onclick = () => topbarMenu.classList.toggle("open");
+// Close the menu after pressing a button inside it
+topbarMenu.addEventListener("click", (e) => {
+  if (e.target.tagName === "BUTTON") topbarMenu.classList.remove("open");
+});
+// ====== END SORT + PIN + MENU ======
 // ====== PER-TOPIC INSTRUCTIONS (system_prompt) ======
 // Multi-line popup instead of prompt()
 const instructionsPanel = document.getElementById("instructionsPanel");
@@ -602,8 +651,8 @@ function renderChat() {
     // --- Message content as before ---
     if (msg.role === "assistant") {
       // Use Markdown rendering for assistant
-      if (window.markdownit) {
-        div.innerHTML = window.markdownit().render(msg.content);
+      if (md) {
+        div.innerHTML = md.render(msg.content);
       } else {
         div.innerHTML = msg.content.replace(/\n\n/g, "<br><br>").replace(/\n/g, "<br>");
       }
@@ -689,10 +738,17 @@ function renderChat() {
       chatWindow.appendChild(actionRow);
     }
 
-    // ====== If user message, action row is trash/copy ======
+    // ====== If user message, action row is edit/copy/calendar/trash ======
     if (msg.role === "user") {
       const actionRow = document.createElement('div');
       actionRow.className = "action-row";
+      // ===== Edit Button =====
+      const editBtn = document.createElement('button');
+      editBtn.textContent = "✏️";
+      editBtn.title = "Edit and resend this message";
+      editBtn.className = "edit-btn";
+      editBtn.onclick = () => startEdit(msg);
+      actionRow.appendChild(editBtn);
       // ===== Copy Button - NEW! =====
       const copyBtn = document.createElement('button');
       copyBtn.textContent = "📋";
@@ -721,8 +777,9 @@ function renderChat() {
     }
 
     // ---- SUGGESTION BUTTONS after [the last assistant message only, and only if we have suggestions] ----
-    if (msg.role === "assistant" && idx === lastAssistantIdx && lastSuggestions && lastSuggestions[msg.id]) {
-      const suggArr = lastSuggestions[msg.id];
+    // Uses suggestions from memory, or the ones saved in the database
+    const suggArr = (lastSuggestions && lastSuggestions[msg.id]) || msg.suggestions;
+    if (msg.role === "assistant" && idx === lastAssistantIdx && Array.isArray(suggArr) && suggArr.some(Boolean)) {
       const sugg = document.createElement('div');
       sugg.className = 'suggestions';
       for(let i=0; i<3; ++i) {
@@ -898,18 +955,19 @@ async function sendSuggestion(idx, suggArr, assistantMsg, assistantMsgIdx) {
   const selectedModel = modelDropdown.value;
   await streamChatWithContinue(contextMessages, selectedModel, {
     onChunk: (partial) => {
-      if (window.markdownit) {
-        streamDiv.innerHTML = window.markdownit().render(partial);
+      if (md) {
+        streamDiv.innerHTML = md.render(partial);
       } else {
         streamDiv.textContent = partial;
       }
       scrollToBottomIfNear(chatWindow);
     },
     onDone: async (fullReply, meta) => {
-      await addMessage("assistant", fullReply);
+      const sugg = (meta && meta.suggestions) || ["", "", ""];
+      await addMessage("assistant", fullReply, sugg);
       await loadMessages();
       const lastMsg = messages[messages.length - 1];
-      lastSuggestions[lastMsg.id] = (meta && meta.suggestions) || ["", "", ""];
+      lastSuggestions[lastMsg.id] = sugg;
       renderAll();
     },
     onError: (errMsg) => {
@@ -939,7 +997,36 @@ function autoGrow(textarea) {
 userInput.addEventListener("input", function() {
   autoGrow(this);
 });
-
+// ====== EDIT USER MESSAGE ======
+let editingMsg = null; // the user message being edited (null = not editing)
+const cancelEditBtn = document.getElementById("cancelEditBtn");
+function startEdit(msg) {
+  editingMsg = msg;
+  userInput.value = msg.content;
+  autoGrow(userInput);
+  userInput.focus();
+  chatForm.querySelector('button[type="submit"]').textContent = "Resend";
+  cancelEditBtn.style.display = "";
+}
+function cancelEdit() {
+  editingMsg = null;
+  userInput.value = "";
+  autoGrow(userInput);
+  chatForm.querySelector('button[type="submit"]').textContent = "Send";
+  cancelEditBtn.style.display = "none";
+}
+cancelEditBtn.onclick = cancelEdit;
+// Deletes this message and every message after it (in the current topic)
+async function deleteFromMessage(msg) {
+  const { error } = await supabase
+    .from('messages')
+    .delete()
+    .eq('topic_id', topics[activeTopicIdx].id)
+    .gte('created_at', msg.created_at);
+  if (error) { alert(error.message); return false; }
+  return true;
+}
+// ====== END EDIT USER MESSAGE ======
 // ===== Chat Submit =====
 let isSending = false;
 chatForm.onsubmit = async (e) => {
@@ -952,6 +1039,18 @@ chatForm.onsubmit = async (e) => {
   const sendBtn = chatForm.querySelector('button[type="submit"]');
   sendBtn.disabled = true;
   sendBtn.textContent = "…";
+  // If editing: remove the old message and everything after it first
+  if (editingMsg) {
+    const ok = await deleteFromMessage(editingMsg);
+    if (!ok) {
+      isSending = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Resend";
+      return;
+    }
+    editingMsg = null;
+    cancelEditBtn.style.display = "none";
+  }
   await addMessage("user", text);
   userInput.value = '';
   autoGrow(userInput);
@@ -966,18 +1065,19 @@ chatForm.onsubmit = async (e) => {
   const selectedModel = modelDropdown.value;
   await streamChatWithContinue(contextMessages, selectedModel, {
     onChunk: (partial) => {
-      if (window.markdownit) {
-        streamDiv.innerHTML = window.markdownit().render(partial);
+      if (md) {
+        streamDiv.innerHTML = md.render(partial);
       } else {
         streamDiv.textContent = partial;
       }
       scrollToBottomIfNear(chatWindow);
     },
     onDone: async (fullReply, meta) => {
-      await addMessage("assistant", fullReply);
+      const sugg = (meta && meta.suggestions) || ["", "", ""];
+      await addMessage("assistant", fullReply, sugg);
       await loadMessages();
       const lastMsg = messages[messages.length - 1];
-      lastSuggestions[lastMsg.id] = (meta && meta.suggestions) || ["", "", ""];
+      lastSuggestions[lastMsg.id] = sugg;
       renderAll();
     },
     onError: (errMsg) => {
@@ -1269,3 +1369,7 @@ window.onload = async () => {
   // ---- CHANGED: Do NOT focus here ----
   // Don't auto-focus userInput on load
 };
+// ==== PWA: register service worker (makes "Add to Home Screen" work as an app) ====
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
