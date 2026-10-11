@@ -487,6 +487,13 @@ document.getElementById("showSheetBtn").addEventListener("click", closeTools);
 document.getElementById("dashboardBtn").addEventListener("click", closeTools);
 // Close when a message is sent
 chatForm.addEventListener("submit", closeTools);
+// Pressing ⋯ or ➤ does not take focus from the text box (no jumping while tapping)
+document.getElementById("sendBtn").addEventListener("mousedown", (e) => e.preventDefault());
+toolsBtn.addEventListener("mousedown", (e) => e.preventDefault());
+// Mobile: after sending, close the keyboard so the text box shrinks to 1 line and the answer is easy to read
+chatForm.addEventListener("submit", () => {
+  if (window.matchMedia("(max-width: 600px)").matches) userInput.blur();
+});
 // ====== END SORT + PIN + MENU ======
 // ====== PER-TOPIC INSTRUCTIONS (system_prompt) ======
 // Multi-line popup instead of prompt()

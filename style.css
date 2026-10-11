@@ -590,3 +590,73 @@ body {
     padding: 0.45em 0.7em;
   }
 }
+/* ===== Fixed layout: only the chat messages scroll ===== */
+html, body {
+  height: 100%;
+  overflow: hidden;           /* the page itself never scrolls */
+  overscroll-behavior: none;  /* no bounce / pull-to-refresh moving the page */
+}
+body {
+  height: 100vh;   /* fallback for older browsers */
+  height: 100dvh;  /* real visible height on phones (address bar + keyboard aware) */
+  min-height: 0;
+}
+.main-wrapper {
+  width: 100%; /* 100vw can be slightly too wide and allow sideways movement */
+}
+#topbar, #chatForm {
+  flex-shrink: 0; /* bars are never squeezed */
+}
+#chatWindow {
+  overscroll-behavior: contain; /* scrolling messages never drags the page */
+}
+/* ===== Send column: small ⋯ above big ➤ ===== */
+#sendCol {
+  display: contents; /* desktop: Send button behaves as before */
+}
+@media (max-width: 600px) {
+  #sendCol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  /* ⋯ smaller */
+  #chatForm #toolsBtn {
+    font-size: 1em;
+    line-height: 1;
+    padding: 0.1em 0.6em;
+  }
+  /* ➤ bigger */
+  #chatForm #sendBtn {
+    width: 54px;
+    height: 42px;
+    padding: 0;
+    border-radius: 10px;
+  }
+  #chatForm #sendBtn::after {
+    font-size: 24px;
+  }
+  /* ↻ while editing (needed because Send is now inside #sendCol) */
+  #chatForm #cancelEditBtn:not([style*="none"]) ~ #sendCol #sendBtn::after {
+    content: "↻";
+  }
+  #chatForm #cancelEditBtn {
+    height: 42px;
+  }
+  /* Text box: 1 line when not in use, bigger when tapped */
+  #userInput {
+    font-size: 16px;   /* 16px also prevents zoom on iPhone */
+    padding: 8px 10px;
+    min-height: 1.3em; /* one line */
+    transition: none;
+  }
+  #userInput:not(:focus) {
+    max-height: 1.3em; /* only 1 line visible when not typing */
+    overflow: hidden;
+  }
+  #userInput:focus {
+    min-height: 4em;   /* about 3 lines when typing */
+    max-height: 40vh;  /* grows with text, max 40% of the screen */
+  }
+}
