@@ -2,7 +2,8 @@
 const SHEETS = {
   Activities: '18EByyIETsXTqVUO5dSPXoDCfU_5zYQnmroNNEPX8GlE',
   FootballSessions: '1U2ZmiGJfotFVYGRGytANJosiWQJHJcMSSoMzP4DUU4Q',
-  HiddenPotential: '1pRSSMA6oWZDkuIwaXmPXA9CivUhCw5jqL68MLPTQYWU'
+  HiddenPotential: '1pRSSMA6oWZDkuIwaXmPXA9CivUhCw5jqL68MLPTQYWU',
+  MakerLog: '1K3jFshpihQ3-kxMAgPQv12BKkJO7EM0t4-T2c6aKkr4'
 };
 // Proper CSV parser: handles "quoted, cells", "" escaped quotes and line breaks inside cells
 function parseCSV(text) {

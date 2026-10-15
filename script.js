@@ -1139,6 +1139,7 @@ const SHEET_CHOICES = [
   { key: "Activities", label: "Activities" },
   { key: "FootballSessions", label: "Football Sessions" },
   { key: "HiddenPotential", label: "Hidden Potential" },
+  { key: "MakerLog", label: "Maker Log" },
 ];
 // Click 📄 -> show/hide the chooser
 showSheetBtn.onclick = function() {
