@@ -192,6 +192,35 @@ async function* openaiStreamChat(messages, modelId, info) {
     if (delta) yield delta;
   }
 }
+// ---- DeepSeek streaming (OpenAI-compatible API) ----
+async function* deepseekStreamChat(messages, modelId, info) {
+  const key = env("DEEPSEEK_API_KEY");
+  if (!key) throw new Error("Missing DEEPSEEK_API_KEY");
+  const resp = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key,
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages,
+      stream: true,
+      max_tokens: 8000,
+      temperature: 0.7
+    }),
+  });
+  if (!resp.ok || !resp.body) throw await apiError("DeepSeek API: ", resp);
+  for await (const line of sseLines(resp)) {
+    const parsed = sseData(line);
+    if (!parsed) continue;
+    const choice = parsed.choices?.[0];
+    if (choice?.finish_reason) info.stopReason = choice.finish_reason;
+    // Only the answer text. "reasoning_content" (thinking) is skipped.
+    const delta = choice?.delta?.content;
+    if (delta) yield delta;
+  }
+}
 // ---- Handler ----
 export default async (req, context) => {
   const authUser = await verifyUser(req);
@@ -231,6 +260,7 @@ export default async (req, context) => {
         let gen;
         if (/^gemini/i.test(useModel)) gen = geminiStreamChat(contextMsgs, useModel, info);
         else if (/^claude/i.test(useModel)) gen = claudeStreamChat(contextMsgs, useModel, info);
+        else if (/^deepseek/i.test(useModel)) gen = deepseekStreamChat(contextMsgs, useModel, info);
         else gen = openaiStreamChat(contextMsgs, useModel, info);
         for await (const delta of gen) {
           fullReply += delta;
