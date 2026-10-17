@@ -110,21 +110,24 @@ function scrollToBottomIfNear(el) {
   }
 }
 // ======== END Scroll Helpers =========
-// --- Add to script.js: splits long text into ~1000 char chunks at ".", "!", "?"
-function splitTextIntoChunks(text, charLimit = 1000) {
-  if (text.length <= charLimit) return [text];
-  const sentences = text.match(/[^.!?]+[.!?]+|\s*\S+$/g); // naive sentence split
+// --- Splits long text into ~1000 char chunks at ".", "!", "?"
+// firstLimit: the FIRST chunk can be shorter, so audio starts faster
+function splitTextIntoChunks(text, charLimit = 1000, firstLimit = charLimit) {
+  if (text.length <= firstLimit) return [text];
+  // Sentences ending with . ! ? plus any last part without punctuation (nothing is lost)
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
   const chunks = [];
   let current = "";
   for (const sent of sentences) {
-    if ((current + sent).length > charLimit) {
-      if (current) chunks.push(current);
+    const limit = chunks.length === 0 ? firstLimit : charLimit;
+    if (current && (current + sent).length > limit) {
+      chunks.push(current);
       current = sent.trim();
     } else {
       current += sent;
     }
   }
-  if (current) chunks.push(current);
+  if (current.trim()) chunks.push(current);
   return chunks;
 }
 // =======================
@@ -642,6 +645,39 @@ function markdownToPlainText(md) {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+// ====== TTS: clean markdown so it sounds natural when read aloud ======
+function textForSpeech(mdText) {
+  const lines = String(mdText || "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let inCode = false;
+  for (let line of lines) {
+    // Skip code blocks completely (code sounds strange when read aloud)
+    if (/^\s*```/.test(line)) { inCode = !inCode; continue; }
+    if (inCode) continue;
+    // Skip horizontal rules --- *** ___
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) continue;
+    // Skip table separator rows |---|---|
+    if (line.includes("|") && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(line)) continue;
+    line = line.replace(/^\s*#{1,6}\s+/, "");   // # Heading
+    line = line.replace(/^\s*>\s?/, "");        // > quote
+    line = line.replace(/^\s*[-*+]\s+/, "");    // - bullet
+    // Table row | a | b |  ->  a, b
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      line = line.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim()).filter(Boolean).join(", ");
+    }
+    line = line.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");  // images -> alt text
+    line = line.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");   // links -> text only (no URL read aloud)
+    line = stripInlineMarkdown(line);                       // **bold**, *italic*, `code` ...
+    line = line.replace(/https?:\/\/\S+/g, "").trim();     // bare URLs
+    if (!line) continue;
+    // Short pause after headings, bullets and table rows
+    if (!/[.!?:;,]$/.test(line)) line += ".";
+    out.push(line);
+  }
+  return out.join("\n");
+}
+// ====== END TTS clean ======
+
 function addToGoogleCalendar(text) {
   const title = topics[activeTopicIdx] ? topics[activeTopicIdx].name : "Chat note";
   // All-day event today (date/time can be changed in Google Calendar before saving)
@@ -717,16 +753,16 @@ function renderChat() {
       listenBtn.onclick = async () => {
         listenBtn.disabled = true;
         listenBtn.textContent = "…";
-        // === CHANGES HERE: Remove any previous stop button
-        removeStopBtn();
         try {
-          await playTTSwithStop(msg.content, "English", actionRow, listenBtn);
+          // Clean markdown before reading aloud (fallback: raw text if nothing is left)
+          const speech = textForSpeech(msg.content) || msg.content;
+          await playTTSwithStop(speech, "English", actionRow, listenBtn);
         } catch (e) {
           alert("Could not play audio: " + (e.message||e));
         }
         listenBtn.textContent = "🔊";
         listenBtn.disabled = false;
-        removeStopBtn();
+        // (stop button is removed inside playTTSwithStop)
       };
       actionRow.appendChild(listenBtn);
 
@@ -739,7 +775,7 @@ function renderChat() {
         downloadBtn.disabled = true;
         downloadBtn.textContent = "…";
         try {
-          await downloadTTS(msg.content, "English");
+          await downloadTTS(textForSpeech(msg.content) || msg.content, "English");
         } catch (e) {
           alert("Download failed: " + (e.message||e));
         }
@@ -873,15 +909,17 @@ async function downloadTTS(text, language) {
   setTimeout(() => URL.revokeObjectURL(url), 8000); // Clean up
 }
 
-// ======= Play TTS function: Queued, Prefetches all chunks and plays in sequence =======
+// ======= Play TTS function: plays chunk 1 as soon as it is ready, the rest load in the background =======
 async function playTTSwithStop(text, language, containerEl, listenBtn) {
-  const chunks = splitTextIntoChunks(text, 1000);
-  let audioBlobs = []; // If last playback was still there, try to stop it
-  stopTTSPlayback();
-
+  // Short first chunk (~250 chars) so audio starts fast, the rest ~1000 chars
+  const chunks = splitTextIntoChunks(text, 1000, 250);
+  stopTTSPlayback(); // If last playback was still there, stop it
   ttsState.stopRequested = false;
   ttsState.audios = [];
-
+  // Each playback gets its own id. Starting a new one stops the old one.
+  const myId = (ttsState.playId || 0) + 1;
+  ttsState.playId = myId;
+  const stopped = () => ttsState.stopRequested || ttsState.playId !== myId;
   // Create a Stop button and show in the container next to Listen
   let stopBtn = document.createElement('button');
   stopBtn.textContent = "⏹️ Stop";
@@ -894,13 +932,13 @@ async function playTTSwithStop(text, language, containerEl, listenBtn) {
   stopBtn.style.padding = "0.2em 1.1em";
   stopBtn.style.cursor = "pointer";
   stopBtn.onclick = stopTTSPlayback;
-  // Remove any old stop button
   removeStopBtn();
   containerEl.appendChild(stopBtn);
   ttsState.stopBtn = stopBtn;
   try {
     const headers = await authHeaders();
-    audioBlobs = await Promise.all(chunks.map(chunk =>
+    // Start ALL requests now (in parallel), but don't wait for all of them
+    const blobPromises = chunks.map(chunk =>
       fetch("/.netlify/functions/tts", {
         method: "POST",
         headers,
@@ -910,45 +948,42 @@ async function playTTSwithStop(text, language, containerEl, listenBtn) {
         if (!resp.ok) throw new Error("TTS error: " + resp.statusText);
         return resp.blob();
       })
-    ));
-  } catch (e) {
-    removeStopBtn();
-    throw e;
-  }
-
-  const audioUrls = audioBlobs.map(blob => URL.createObjectURL(blob));
-  try {
-    for (let i = 0; i < audioUrls.length; i++) {
-      if (ttsState.stopRequested) break;
-      await new Promise((resolve, reject) => {
-        const audio = new Audio(audioUrls[i]);
-        ttsState.audios.push(audio);
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrls[i]);
-          resolve();
-        };
-        audio.onerror = (err) => {
-          URL.revokeObjectURL(audioUrls[i]);
-          reject(err);
-        };
-        audio.play();
-        // If stop requested while playing, pause/abort immediately
-        let interval = setInterval(() => {
-          if (ttsState.stopRequested) {
-            audio.pause();
-            audio.currentTime = 0;
-            clearInterval(interval);
-            URL.revokeObjectURL(audioUrls[i]);
-            resolve();
-          }
-        }, 160);
-      });
+    );
+    // Avoid "unhandled error" warnings for chunks we never reach (e.g. after Stop)
+    blobPromises.forEach(p => p.catch(() => {}));
+    for (let i = 0; i < blobPromises.length; i++) {
+      if (stopped()) break;
+      // Chunk 1: waits only for itself. Later chunks are usually ready already.
+      const blob = await blobPromises[i];
+      if (stopped()) break;
+      const url = URL.createObjectURL(blob);
+      try {
+        await new Promise((resolve, reject) => {
+          const audio = new Audio(url);
+          ttsState.audios.push(audio);
+          // If stop is requested while playing, end this chunk immediately
+          const interval = setInterval(() => {
+            if (stopped()) {
+              clearInterval(interval);
+              audio.pause();
+              resolve();
+            }
+          }, 160);
+          audio.onended = () => { clearInterval(interval); resolve(); };
+          audio.onerror = () => { clearInterval(interval); reject(new Error("Audio playback error")); };
+          audio.play().catch(err => { clearInterval(interval); reject(err); });
+        });
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     }
   } finally {
-    removeStopBtn();
-    ttsState.stopRequested = false;
-    for (const url of audioUrls) URL.revokeObjectURL(url);
-    ttsState.audios = [];
+    // Only clean up if no newer playback has started meanwhile
+    if (ttsState.playId === myId) {
+      removeStopBtn();
+      ttsState.stopRequested = false;
+      ttsState.audios = [];
+    }
   }
 }
 
