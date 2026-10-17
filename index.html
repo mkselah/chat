@@ -61,6 +61,7 @@
           <button type="button" id="micBtn" title="Use voice input">🎤</button>
           <button id="showSheetBtn" type="button" title="Show Google Sheet Data">📄</button>
           <button id="dashboardBtn" type="button" title="Football skill dashboard">📈</button>
+          <button id="imageBtn" type="button" title="Generate image">🎨</button>
         </div>
         <button type="button" id="cancelEditBtn" title="Cancel edit" style="display:none;">✖</button>
         <div id="sendCol">
@@ -93,6 +94,37 @@
       <div id="instructionsButtons">
         <button id="instructionsCancelBtn" type="button">Cancel</button>
         <button id="instructionsSaveBtn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+  <!-- Image generation popup -->
+  <div id="imagePanel" style="display:none;">
+    <div id="imageBox">
+      <div id="imageTitle">🎨 Generate image</div>
+      <textarea id="imagePrompt" rows="4" placeholder="Describe the image you want..."></textarea>
+      <div id="imageOptions">
+        <select id="imageModel" title="Image model">
+          <option value="gpt-image-1-mini">GPT Image mini (cheapest)</option>
+          <option value="gpt-image-1">GPT Image</option>
+          <option value="gemini-2.5-flash-image">Gemini Image</option>
+        </select>
+        <select id="imageQuality" title="Quality (GPT Image only)">
+          <option value="low" selected>Low quality (cheap)</option>
+          <option value="medium">Medium quality</option>
+          <option value="high">High quality (expensive!)</option>
+        </select>
+        <select id="imageShape" title="Shape">
+          <option value="square" selected>Square</option>
+          <option value="portrait">Portrait</option>
+          <option value="landscape">Landscape</option>
+        </select>
+      </div>
+      <div id="imageStatus"></div>
+      <img id="imagePreview" alt="Generated image" style="display:none;" />
+      <div id="imageButtons">
+        <button id="imageCloseBtn" type="button">Close</button>
+        <button id="imageDownloadBtn" type="button" style="display:none;">⬇️ Download again</button>
+        <button id="imageGenerateBtn" type="button">Generate</button>
       </div>
     </div>
   </div>

@@ -675,3 +675,112 @@ body {
     gap: 14px;
   }
 }
+/* ===== 🎨 Image generation ===== */
+#chatForm #imageBtn {
+  background: none;
+  border: none;
+  font-size: 1.13em;
+  padding: 0.1em 0.7em;
+  border-radius: 6px;
+  opacity: 0.7;
+  cursor: pointer;
+  box-shadow: none;
+}
+#chatForm #imageBtn:hover {
+  background: #e0e4fc;
+  opacity: 1;
+}
+#imagePanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+}
+#imageBox {
+  background: white;
+  border-radius: 10px;
+  width: min(600px, 96vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+#imageTitle {
+  font-weight: bold;
+}
+#imagePrompt {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 90px;
+  font-size: 16px; /* 16px prevents iPhone auto-zoom */
+  font-family: inherit;
+  line-height: 1.4;
+  padding: 0.6em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  resize: vertical;
+}
+#imageOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#imageOptions select {
+  flex: 1;
+  min-width: 110px;
+  font-size: 16px;
+  padding: 0.35em;
+  border-radius: 6px;
+}
+#imageStatus {
+  font-size: 0.9em;
+  color: #444;
+  min-height: 1.2em;
+}
+#imagePreview {
+  max-width: 100%;
+  max-height: 45vh;
+  object-fit: contain;
+  align-self: center;
+  border-radius: 8px;
+  border: 1px solid #dde;
+}
+#imageButtons {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#imageButtons button {
+  font-size: 1em;
+  padding: 0.45em 1.3em;
+  border: none;
+  border-radius: 6px;
+  background: #e5eaff;
+  cursor: pointer;
+}
+#imageButtons #imageGenerateBtn {
+  background: #8db8ff;
+}
+#imageButtons button:active {
+  background: #6799db;
+  color: white;
+}
+#imageButtons button:disabled {
+  opacity: 0.6;
+}
+@media (max-width: 600px) {
+  #imagePanel {
+    align-items: flex-end;
+  }
+  #imageBox {
+    width: 100vw;
+    border-radius: 10px 10px 0 0;
+  }
+}

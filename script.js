@@ -488,6 +488,7 @@ toolsBtn.onclick = () => {
 // Close after 📄 or 📈 (🎤 keeps it open, so you can see and press ⏹️)
 document.getElementById("showSheetBtn").addEventListener("click", closeTools);
 document.getElementById("dashboardBtn").addEventListener("click", closeTools);
+document.getElementById("imageBtn").addEventListener("click", closeTools);
 // Close when a message is sent
 chatForm.addEventListener("submit", closeTools);
 // ====== Show ⋯ only while typing (mobile) ======
@@ -1435,6 +1436,152 @@ dashAskBtn.onclick = () => {
   userInput.focus();
 };
 // ====== END FOOTBALL DASHBOARD ======
+// ====== IMAGE GENERATION (🎨) ======
+// Image is downloaded only. NOT saved in the database or the chat.
+const imageBtn = document.getElementById("imageBtn");
+const imagePanel = document.getElementById("imagePanel");
+const imagePrompt = document.getElementById("imagePrompt");
+const imageModel = document.getElementById("imageModel");
+const imageQuality = document.getElementById("imageQuality");
+const imageShape = document.getElementById("imageShape");
+const imageStatus = document.getElementById("imageStatus");
+const imagePreview = document.getElementById("imagePreview");
+const imageGenerateBtn = document.getElementById("imageGenerateBtn");
+const imageDownloadBtn = document.getElementById("imageDownloadBtn");
+const imageCloseBtn = document.getElementById("imageCloseBtn");
+let imageBlobUrl = null;   // temporary URL for the last image (memory only)
+let imageFileName = "";
+let imageBusy = false;
+// base64 text -> Blob (file in memory)
+function base64ToBlob(b64, mime) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+// Start a download of the current image
+function imageDownload() {
+  if (!imageBlobUrl) return;
+  const a = document.createElement("a");
+  a.href = imageBlobUrl;
+  a.download = imageFileName || "image.png";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+// Remove preview and free memory
+function imageClearPreview() {
+  imagePreview.style.display = "none";
+  imagePreview.removeAttribute("src");
+  imageDownloadBtn.style.display = "none";
+  if (imageBlobUrl) URL.revokeObjectURL(imageBlobUrl);
+  imageBlobUrl = null;
+}
+// Quality only works for GPT Image (Gemini has no quality setting)
+function imageUpdateQuality() {
+  imageQuality.disabled = /^gemini/i.test(imageModel.value);
+}
+// Remember the choices for next time
+function imageSaveChoices() {
+  localStorage.setItem("imageModel", imageModel.value);
+  localStorage.setItem("imageQuality", imageQuality.value);
+  localStorage.setItem("imageShape", imageShape.value);
+}
+function imageRestoreChoices() {
+  const restore = (sel, key) => {
+    const v = localStorage.getItem(key);
+    if (v && [...sel.options].some(o => o.value === v)) sel.value = v;
+  };
+  restore(imageModel, "imageModel");
+  restore(imageQuality, "imageQuality");
+  restore(imageShape, "imageShape");
+}
+function closeImagePanel() {
+  imagePanel.style.display = "none";
+  imageClearPreview();
+  if (!imageBusy) imageStatus.textContent = "";
+}
+imageBtn.onclick = () => {
+  // Use the text from the chat box as prompt (if there is any)
+  if (userInput.value.trim()) imagePrompt.value = userInput.value.trim();
+  imageRestoreChoices();
+  imageUpdateQuality();
+  imagePanel.style.display = "flex";
+  imagePrompt.focus();
+};
+imageModel.onchange = imageUpdateQuality;
+imageCloseBtn.onclick = closeImagePanel;
+imageDownloadBtn.onclick = imageDownload;
+// Click on dark background closes too
+imagePanel.onclick = (e) => {
+  if (e.target === imagePanel) closeImagePanel();
+};
+// Escape closes, Ctrl+Enter generates
+imagePrompt.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeImagePanel();
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) imageGenerateBtn.click();
+});
+imageGenerateBtn.onclick = async () => {
+  const prompt = imagePrompt.value.trim();
+  if (!prompt) { imageStatus.textContent = "Please write what the image should show."; return; }
+  if (imageBusy) return;
+  imageBusy = true;
+  imageSaveChoices();
+  imageClearPreview();
+  imageGenerateBtn.disabled = true;
+  imageGenerateBtn.textContent = "…";
+  const start = Date.now();
+  imageStatus.textContent = "Generating… (can take up to 1 minute)";
+  const timer = setInterval(() => {
+    imageStatus.textContent = "Generating… " + Math.round((Date.now() - start) / 1000) + "s (can take up to 1 minute)";
+  }, 1000);
+  try {
+    const resp = await fetch("/api/image", {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({
+        prompt,
+        model: imageModel.value,
+        quality: imageQuality.value,
+        shape: imageShape.value
+      })
+    });
+    // The answer is some empty "keep-alive" lines + one JSON line at the end
+    const text = await resp.text();
+    const lastLine = text.trim().split("\n").pop() || "";
+    let data;
+    try { data = JSON.parse(lastLine); }
+    catch (e) { throw new Error("Bad answer from server (status " + resp.status + ")"); }
+    if (data.error) throw new Error(data.error);
+    if (!data.b64) throw new Error("No image received");
+    const mime = data.mime || "image/png";
+    const ext = mime.includes("jpeg") ? "jpg" : (mime.split("/")[1] || "png");
+    imageFileName = "image-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "." + ext;
+    imageBlobUrl = URL.createObjectURL(base64ToBlob(data.b64, mime));
+    imageDownload();
+    if (imagePanel.style.display !== "none") {
+      // Popup still open: show temporary preview (disappears when closed)
+      imagePreview.src = imageBlobUrl;
+      imagePreview.style.display = "block";
+      imageDownloadBtn.style.display = "";
+      imageStatus.textContent = "Done ✅ Image downloaded (" + Math.round((Date.now() - start) / 1000) + "s). On iPhone: long-press the image to save it.";
+    } else {
+      // Popup was closed while waiting: just download, then free memory
+      const url = imageBlobUrl;
+      imageBlobUrl = null;
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      imageStatus.textContent = "";
+    }
+  } catch (e) {
+    imageStatus.textContent = "Error: " + (e.message || e);
+  } finally {
+    clearInterval(timer);
+    imageBusy = false;
+    imageGenerateBtn.disabled = false;
+    imageGenerateBtn.textContent = "Generate";
+  }
+};
+// ====== END IMAGE GENERATION ======
 // ==== INIT ===
 window.onload = async () => {
   let { data: { user: u }} = await supabase.auth.getUser();
